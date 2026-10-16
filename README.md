@@ -90,6 +90,22 @@ Os 8 primeiros dígitos identificam a **empresa**; a ordem `0001` costuma ser a 
 | Qualidade de código | ruff, black, mypy, pre-commit, gitleaks | Padrão comum aos 3 projetos |
 | CI | GitHub Actions | Lint + testes + smoke test do ambiente Docker |
 
+## Develop in GitHub Codespaces
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/thalesreiser/spark-cnpj-lakehouse?quickstart=1)
+
+The repository ships a dev container (`.devcontainer/`), so the whole environment runs in the cloud and nothing needs to be installed locally. The codespace is created on a 4-core / 16 GB machine with Python 3.11, Java 17, Docker and make preinstalled; dependencies and pre-commit hooks are set up on creation.
+
+```bash
+make up      # Spark master + worker and MinIO, bucket created
+make smoke   # writes and reads a Delta table on MinIO
+make test    # unit tests
+```
+
+Forwarded ports: Spark master UI (8080), Spark worker UI (8081), MinIO console (9001) and the Spark application UI (4040).
+
+Codespaces consume the monthly quota of the GitHub account: **stop** the codespace when you are not using it (it also stops after 30 minutes idle) and **delete** it at the end of a phase. The same configuration works locally with Docker Desktop and the VS Code *Dev Containers* extension.
+
 ## Como rodar
 
 ### Pré-requisitos
