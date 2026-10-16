@@ -39,7 +39,7 @@ curl -O https://arquivos.receitafederal.gov.br/public.php/dav/files/gn672Ad4CF8N
 
 ## Layout of a monthly release
 
-37 zip files, each holding a single headerless `;`-separated CSV (Latin-1) with a cryptic name such as `K3241.K03200Y0.D60912.EMPRECSV`. The names of the extracted files are recorded per zip in `manifest.json`, so the bronze layer does not need to guess them.
+37 zip files, each holding a single headerless `;`-separated CSV (Latin-1) with a cryptic name such as `K3241.K03200Y0.D60912.EMPRECSV`. The names of the extracted files are recorded per zip in `manifest.json`, so the bronze layer does not need to guess them. Columns, types and the exact CSV format (quoting, dates, decimals) are in the [data dictionary](data-dictionary.md).
 
 Sizes of the **2026-09** release (from `PROPFIND`; uncompressed sizes read from each zip's central directory with `Range` requests, without downloading the data):
 
