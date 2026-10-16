@@ -2,7 +2,7 @@
 
 | Requirement | Component | Test | Status |
 |---|---|---|---|
-| RF-01 | `cnpj_lakehouse/download.py` | | ⬜ |
+| RF-01 | `cnpj_lakehouse/download.py`, `Makefile` (`download`), `.github/workflows/download.yml` | `tests/test_download.py` (integration with a local HTTP server: files, manifest SHA-256, idempotency, resume with/without `Range`, retries), `Download` workflow (real source) | ✅ |
 | RF-02 | `cnpj_lakehouse/bronze.py` | | ⬜ |
 | RF-03 | `cnpj_lakehouse/silver.py` | | ⬜ |
 | RF-04 | `cnpj_lakehouse/silver.py` | | ⬜ |
@@ -22,3 +22,4 @@
 | 2026-10-16 | Project Spark image (Python 3.11) instead of `bitnami/spark`; MinIO from the `pgsty/minio` fork; driver in a container | Official Bitnami and MinIO images unavailable on Docker Hub; `apache/spark` ships Python 3.10 | [005](adr/005-docker-environment-images.md) |
 | 2026-10-16 | Repository documentation and code translated to English | Git/GitHub artifacts are written in English | — |
 | 2026-10-16 | GitHub Actions is the execution environment for the Docker stack and heavy runs | The development laptop lacks the disk and RAM to run the stack and datasets locally | [006](adr/006-ci-as-execution-environment.md) |
+| 2026-10-16 | CNPJ data downloaded from the Receita Federal Nextcloud share through public WebDAV; base URL configurable | The source moved again (R-04): the old `dadosabertos.rfb.gov.br` and `arquivos.receitafederal.gov.br/dados/cnpj/...` URLs are gone | [007](adr/007-cnpj-source-nextcloud-webdav.md) |
