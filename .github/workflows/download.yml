@@ -57,7 +57,7 @@ jobs:
         run: |
           dir="data/raw/${COMPETENCIA}"
           cat "${dir}/manifest.json"
-          (cd "${dir}" && find . -type f ! -name '*.part' -printf '%s\t%P\n' | sort -k2) > "${dir}/files.tsv"
+          (cd "${dir}" && find . -type f ! -name '*.part' ! -name files.tsv -printf '%s\t%P\n' | sort -k2) > "${dir}/files.tsv"
           cat "${dir}/files.tsv"
           (cd "${dir}" && python - <<'PY'
           import hashlib, json, pathlib
