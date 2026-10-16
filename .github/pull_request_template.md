@@ -1,11 +1,11 @@
-## O que muda
+## What changes
 
-## Requisitos relacionados
-<!-- ex.: RF-01, RNF-02 -->
+## Related requirements
+<!-- e.g. RF-01, RNF-02 -->
 
-## Checklist (Definition of Done)
-- [ ] Lint e type-check passando no CI
-- [ ] Testes automatizados passando (cobertura >= 80% nas transformações)
-- [ ] Documentação atualizada (README, diagrama, ADR se houve decisão)
-- [ ] Requisito marcado na matriz de rastreabilidade (`docs/06-rastreabilidade.md`)
-- [ ] Nenhum segredo ou credencial no repositório
+## Definition of Done
+- [ ] Lint and type-check passing in CI
+- [ ] Automated tests passing (coverage >= 80% on transformations)
+- [ ] Documentation updated (README, diagram, ADR if a decision was made)
+- [ ] Requirement marked in the traceability matrix (`docs/06-rastreabilidade.md`)
+- [ ] No secrets or credentials in the repository
