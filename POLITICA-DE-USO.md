@@ -1,29 +1,30 @@
 # Política de uso: spark-cnpj-lakehouse
 
-Esta política explica, em linguagem direta, como este repositório pode ser usado. Os termos com valor jurídico estão no arquivo [`LICENSE`](LICENSE). Se houver diferença entre os dois, vale o `LICENSE`.
+**Autor:** Thales Reiser Pedreira · [GitHub](https://github.com/thalesreiser) · [LinkedIn](https://www.linkedin.com/in/thalesreiserpedreira)
 
-**Autor e titular dos direitos:** Thales Reiser Pedreira · [GitHub](https://github.com/thalesreiser) · [LinkedIn](https://www.linkedin.com/in/thalesreiser/)
+## Licença do código
+
+O código está sob a [licença MIT](LICENSE). Em resumo:
+
+| ✅ Você pode | 📌 Desde que | ⚠️ Saiba que |
+|---|---|---|
+| Usar, copiar, modificar e distribuir o código | Mantenha o aviso `Copyright (c) 2026 Thales Reiser Pedreira` e o texto da licença em qualquer cópia ou trecho substancial | O software é fornecido sem garantia de qualquer tipo |
+| Usar em projetos pessoais ou comerciais | Dê crédito ao autor | O autor não responde por danos nem por custos decorrentes do uso |
+
+O texto do [`LICENSE`](LICENSE) é o que tem valor jurídico; esta página é só um resumo.
 
 ## Finalidade do projeto
 
-Este é um projeto de portfólio, criado para demonstrar competências de engenharia de dados com um processo de engenharia de requisitos documentado. Ele não é um produto e não se destina a uso em produção.
-
-## O que você pode e não pode fazer
-
-| ✅ Permitido sem pedir | ❌ Exige autorização por escrito do autor |
-|---|---|
-| Ler o código e a documentação | Copiar ou redistribuir o código, no todo ou em parte |
-| Clonar e rodar localmente para avaliar o trabalho | Publicar versões modificadas ou obras derivadas |
-| Usar em processo seletivo ou revisão técnica do autor | Uso comercial ou dentro de produtos e serviços |
-| Citar trechos curtos com crédito e link | Apresentar o projeto como de sua autoria |
-| Abrir issues com dúvidas e sugestões | Treinar ou avaliar modelos de IA com o código |
+Este é um projeto de portfólio, criado para demonstrar competências de engenharia de dados com um processo de engenharia de requisitos documentado. Ele não é um produto e não foi pensado para uso em produção.
 
 ## Dados
 
+A licença MIT vale para o **código**, não para os dados que ele processa.
+
 - O repositório **não contém dados brutos**. Os dados são baixados das fontes públicas oficiais em tempo de execução, e apenas pequenas amostras para testes são versionadas.
-- Os dados pertencem às respectivas fontes e seguem os termos de uso delas, que esta política não altera.
+- Os dados pertencem às respectivas fontes e seguem os termos de uso delas.
 - Quem executa o projeto é responsável por usar os dados de acordo com a **LGPD (Lei nº 13.709/2018)** e com os termos das fontes.
-- **Dados de CNPJ (Receita Federal):** os dados de sócios trazem CPF parcialmente mascarado pela própria fonte. É **proibido** usar este projeto para tentar reidentificar pessoas físicas, cruzar os dados com outras bases para esse fim ou montar perfis de pessoas (restrição RST-01 do projeto).
+- **Dados de CNPJ (Receita Federal):** os dados de sócios trazem CPF parcialmente mascarado pela própria fonte. **Não use** este projeto para tentar reidentificar pessoas físicas, cruzar os dados com outras bases para esse fim ou montar perfis de pessoas (restrição RST-01 do projeto; ver também a LGPD).
 - O vínculo de sócios homônimos (RF-10) é um exercício técnico de *record linkage* com revisão amostral, não uma ferramenta de identificação de pessoas.
 
 ## Segurança
@@ -34,8 +35,4 @@ Este é um projeto de portfólio, criado para demonstrar competências de engenh
 
 ## Contribuições
 
-Sugestões e issues são bem-vindas. Ao contribuir, você concorda que o autor pode usar a sua contribuição livremente, conforme a cláusula 4 do [`LICENSE`](LICENSE).
-
-## Pedidos de autorização
-
-Para qualquer uso fora da coluna "Permitido", fale com o autor pelo [GitHub](https://github.com/thalesreiser) ou pelo [LinkedIn](https://www.linkedin.com/in/thalesreiser/) e descreva o uso pretendido.
+Issues e sugestões são bem-vindas. Contribuições enviadas a este repositório ficam sob a mesma licença MIT.

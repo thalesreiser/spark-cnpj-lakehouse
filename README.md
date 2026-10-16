@@ -4,11 +4,13 @@
 ![Python](https://img.shields.io/badge/python-3.11-3776AB?logo=python&logoColor=white)
 ![Spark](https://img.shields.io/badge/Apache%20Spark-3.5-E25A1C?logo=apachespark&logoColor=white)
 ![Delta Lake](https://img.shields.io/badge/Delta%20Lake-3.2-00ADD4)
-![Licença](https://img.shields.io/badge/licen%C3%A7a-propriet%C3%A1ria-lightgrey)
+[![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-green)](LICENSE)
 
 > Lakehouse em camadas (bronze → silver → gold) com **Apache Spark** e **Delta Lake** sobre os Dados Abertos de CNPJ da Receita Federal, com carga incremental, histórico auditável e um benchmark documentado do ganho de desempenho obtido com tuning.
 
 **Status:** 🚧 em desenvolvimento · Épico 1 de 7 (Fundações)
+
+> 🇬🇧 **In English:** A medallion lakehouse (bronze → silver → gold) built with **Apache Spark** and **Delta Lake** on top of Brazil's public company registry (CNPJ, tens of millions of records). It covers schema-enforced ingestion, incremental `MERGE` loads, time travel, data quality checks and a documented before/after performance benchmark (target: ≥ 30% faster main job). Runs fully locally with Docker Compose (Spark + MinIO).
 
 ---
 
@@ -166,11 +168,9 @@ Este é o primeiro de três projetos de engenharia de dados desenvolvidos em seq
 
 ## Licença
 
-Copyright © 2026 Thales Reiser Pedreira. **Todos os direitos reservados.**
-
-O código pode ser lido e executado localmente para avaliação técnica; cópia, redistribuição, obras derivadas e uso comercial exigem autorização por escrito. Veja [`LICENSE`](LICENSE) e [`POLITICA-DE-USO.md`](POLITICA-DE-USO.md).
+Código sob a licença [MIT](LICENSE): pode ser usado, copiado e modificado, inclusive comercialmente, desde que o aviso de copyright de **Thales Reiser Pedreira** seja mantido. Regras sobre os dados e a segurança estão em [`POLITICA-DE-USO.md`](POLITICA-DE-USO.md).
 
 ## Autor
 
-**Thales Reiser Pedreira**, desenvolvedor Python e HPCC com experiência em DevOps e infraestrutura.
-[GitHub](https://github.com/thalesreiser) · [LinkedIn](https://www.linkedin.com/in/thalesreiser/)
+**Thales Reiser Pedreira**, Engenheiro de Dados e de Software · Python, SQL, AWS e Big Data.
+[GitHub](https://github.com/thalesreiser) · [LinkedIn](https://www.linkedin.com/in/thalesreiserpedreira)
