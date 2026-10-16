@@ -442,7 +442,8 @@ def test_parse_args_defaults_and_validation(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     args = dl.parse_args(["--competencia", "2026-09"], {})
-    assert args.files == dl.ALL_FILES
+    assert args.files == dl.resolve_files(["lookups"])  # safe default, not the whole release
+    assert dl.parse_args(["--competencia", "2026-09", "--files", "all"], {}).files == dl.ALL_FILES
     assert args.dest == Path("data/raw")
     assert args.base_url == dl.DEFAULT_BASE_URL
     assert dl.parse_args(["--competencia", "2026-09"], {dl.BASE_URL_ENV: "http://m"}).base_url == (

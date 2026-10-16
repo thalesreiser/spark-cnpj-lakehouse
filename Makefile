@@ -1,7 +1,8 @@
 # COMPETENCIA = reference month of the Receita Federal release (YYYY-MM).
 COMPETENCIA ?= $(shell date +%Y-%m)
 # FILES = optional subset for `make download`: groups (empresas, estabelecimentos, socios,
-# simples, lookups, all) and/or file names (e.g. FILES="lookups Empresas0"). Default: all.
+# simples, lookups, all) and/or file names (e.g. FILES="lookups Empresas0").
+# Default: lookups (a few KB); the whole release (~7.8 GB zipped) needs FILES=all explicitly.
 FILES ?=
 # Use the root .env if present (the compose file lives in infra/ and would not see it).
 ENV_FILE := $(if $(wildcard .env),--env-file .env,)

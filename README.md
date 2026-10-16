@@ -129,12 +129,13 @@ Spark applications run in the `spark-client` service, which uses the same image 
 ### Pipeline
 
 ```bash
-make download COMPETENCIA=2026-09                          # the whole release (~7.8 GB zipped, ~29 GB unzipped)
-make download COMPETENCIA=2026-09 FILES="lookups Empresas1"  # only a subset
-make run                                                    # bronze → silver → gold
+make download COMPETENCIA=2026-09                            # lookup tables only (safe default, a few KB)
+make download COMPETENCIA=2026-09 FILES="lookups Empresas1"  # a subset
+make download COMPETENCIA=2026-09 FILES=all                  # the whole release (~7.8 GB zipped, ~29 GB unzipped)
+make run                                                      # bronze → silver → gold
 ```
 
-`COMPETENCIA` is the reference month (YYYY-MM) of the Receita Federal release, kept with its domain name. `make download` (RF-01) fetches the zips into `data/raw/<COMPETENCIA>/`, unzips them there and writes `manifest.json` with the source URL, size, SHA-256, download time and extracted files of each zip. It retries transient errors with backoff, resumes partial downloads with HTTP `Range`, and skips files that still match the manifest, so re-runs are idempotent. `FILES` accepts groups (`empresas`, `estabelecimentos`, `socios`, `simples`, `lookups`, `all`) and file names (`Empresas0`, `Cnaes`, ...). The same options exist on the CLI:
+`COMPETENCIA` is the reference month (YYYY-MM) of the Receita Federal release, kept with its domain name. `make download` (RF-01) fetches the zips into `data/raw/<COMPETENCIA>/`, unzips them there and writes `manifest.json` with the source URL, size, SHA-256, download time and extracted files of each zip. It retries transient errors with backoff, resumes partial downloads with HTTP `Range`, and skips files that still match the manifest, so re-runs are idempotent. `FILES` accepts groups (`empresas`, `estabelecimentos`, `socios`, `simples`, `lookups`, `all`) and file names (`Empresas0`, `Cnaes`, ...). It defaults to `lookups`, so downloading the whole release always requires an explicit `FILES=all` (a protection for machines and runners with little disk). The same options exist on the CLI:
 
 ```bash
 python -m cnpj_lakehouse.download --competencia 2026-09 --files lookups [--dest data/raw] [--base-url URL]

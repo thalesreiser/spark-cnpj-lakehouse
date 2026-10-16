@@ -452,8 +452,12 @@ def parse_args(argv: Sequence[str] | None, env: Mapping[str, str]) -> argparse.N
     parser.add_argument(
         "--files",
         nargs="+",
-        default=["all"],
-        help=f"files or groups to download ({', '.join(FILE_GROUPS)}); default: all",
+        # Safe default: the lookup tables are a few KB, the full release is ~7.8 GB zipped.
+        default=["lookups"],
+        help=(
+            f"files or groups to download ({', '.join(FILE_GROUPS)}); "
+            "default: lookups (pass 'all' for the whole release)"
+        ),
     )
     parser.add_argument("--dest", type=Path, default=DEFAULT_DEST, help="default: data/raw")
     parser.add_argument(
