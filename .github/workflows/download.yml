@@ -1,0 +1,81 @@
+# RF-01 / ADR 006: downloads one CNPJ release (reference month) from the real Receita Federal
+# source on a GitHub runner and publishes ONLY the manifest and a file listing as an artifact.
+# Raw data is never uploaded (RST-01; artifact quota is 500 MB).
+name: Download
+
+on:
+  workflow_dispatch:
+    inputs:
+      competencia:
+        description: "Reference month (COMPETENCIA), YYYY-MM"
+        required: true
+      files:
+        description: "Files or groups (lookups, empresas, estabelecimentos, socios, simples, all; or e.g. Empresas0). The runner has ~14 GB of disk."
+        required: false
+        default: "lookups"
+  # Proves the real end-to-end download on pull requests that touch the download code.
+  pull_request:
+    paths:
+      - "src/cnpj_lakehouse/download.py"
+      - ".github/workflows/download.yml"
+      - "Makefile"
+
+permissions:
+  contents: read
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      # Pull requests use a fixed, already published reference month and only the lookup tables.
+      COMPETENCIA: ${{ inputs.competencia || '2026-09' }}
+      FILES: ${{ inputs.files || 'lookups' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install the package
+        run: pip install -e .
+      - name: Disk space before
+        run: df -h .
+      - name: Check that the source is reachable from the runner
+        run: |
+          base="${CNPJ_BASE_URL:-$(python -c 'from cnpj_lakehouse.download import DEFAULT_BASE_URL as u; print(u)')}"
+          echo "Source: ${base}/${COMPETENCIA}/"
+          if ! curl -sS -o /dev/null -w "HTTP %{http_code} in %{time_total}s\n" --max-time 60 -X PROPFIND -H "Depth: 1" "${base}/${COMPETENCIA}/"; then
+            echo "::error::The Receita Federal source is unreachable from the GitHub runner (see docs/data-source.md)."
+            exit 1
+          fi
+      - name: make download
+        run: make download COMPETENCIA="$COMPETENCIA" FILES="$FILES"
+      - name: make download again (idempotent re-run, nothing is downloaded)
+        run: make download COMPETENCIA="$COMPETENCIA" FILES="$FILES" 2>&1 | tee rerun.log && ! grep -q "INFO downloading" rerun.log
+      - name: Manifest and file listing
+        run: |
+          dir="data/raw/${COMPETENCIA}"
+          cat "${dir}/manifest.json"
+          (cd "${dir}" && find . -type f ! -name '*.part' ! -name files.tsv -printf '%s\t%P\n' | sort -k2) > "${dir}/files.tsv"
+          cat "${dir}/files.tsv"
+          (cd "${dir}" && python - <<'PY'
+          import hashlib, json, pathlib
+          manifest = json.loads(pathlib.Path("manifest.json").read_text())
+          for entry in manifest["files"]:
+              digest = hashlib.sha256(pathlib.Path(entry["name"]).read_bytes()).hexdigest()
+              assert digest == entry["sha256"], entry["name"]
+              assert all(pathlib.Path(name).is_file() for name in entry["extracted"]), entry["name"]
+          print(f"verified {len(manifest['files'])} file(s) against manifest.json")
+          PY
+          )
+          df -h .
+      - name: Upload manifest (no raw data)
+        uses: actions/upload-artifact@v4
+        with:
+          name: download-manifest-${{ env.COMPETENCIA }}
+          path: |
+            data/raw/${{ env.COMPETENCIA }}/manifest.json
+            data/raw/${{ env.COMPETENCIA }}/files.tsv
+          retention-days: 30
+          if-no-files-found: error

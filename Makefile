@@ -1,5 +1,9 @@
 # COMPETENCIA = reference month of the Receita Federal release (YYYY-MM).
 COMPETENCIA ?= $(shell date +%Y-%m)
+# FILES = optional subset for `make download`: groups (empresas, estabelecimentos, socios,
+# simples, lookups, all) and/or file names (e.g. FILES="lookups Empresas0").
+# Default: lookups (a few KB); the whole release (~7.8 GB zipped) needs FILES=all explicitly.
+FILES ?=
 # Use the root .env if present (the compose file lives in infra/ and would not see it).
 ENV_FILE := $(if $(wildcard .env),--env-file .env,)
 COMPOSE = docker compose $(ENV_FILE) -f infra/docker-compose.yml
@@ -27,8 +31,8 @@ logs:
 ps:
 	$(COMPOSE) ps -a
 
-download:  ## RF-01
-	python -m cnpj_lakehouse.download --competencia $(COMPETENCIA)
+download:  ## RF-01: downloads, unzips and checksums a release into data/raw/<COMPETENCIA>/
+	python -m cnpj_lakehouse.download --competencia $(COMPETENCIA) $(if $(strip $(FILES)),--files $(FILES),)
 
 run:
 	python -m cnpj_lakehouse.pipeline --competencia $(COMPETENCIA)

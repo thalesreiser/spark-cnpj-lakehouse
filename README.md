@@ -97,7 +97,7 @@ The first 8 digits identify the **company**; order `0001` is usually the head of
 |---|---|
 | **Your machine** | Editing, `make lint`, `make test` (unit tests with small DataFrames; needs Python 3.11 and Java 17, no Docker) |
 | **CI on every pull request** | Lint, type-check, tests and the `smoke` job, which builds the image, brings up Spark + MinIO and writes/reads a Delta table |
-| **Manual workflows** | Heavy runs (download, pipeline on a sample, benchmark), added as the pipeline grows |
+| **Manual workflows** | Heavy runs: the `Download` workflow (a reference month from the real source, manifest as an artifact); pipeline on a sample and benchmark as the pipeline grows |
 
 The reasons are in [ADR 006](docs/adr/006-ci-as-execution-environment.md). The whole stack can still run locally if you have Docker:
 
@@ -129,11 +129,19 @@ Spark applications run in the `spark-client` service, which uses the same image 
 ### Pipeline
 
 ```bash
-make download COMPETENCIA=2026-09  # downloads and validates the files of a reference month
-make run                           # bronze → silver → gold
+make download COMPETENCIA=2026-09                            # lookup tables only (safe default, a few KB)
+make download COMPETENCIA=2026-09 FILES="lookups Empresas1"  # a subset
+make download COMPETENCIA=2026-09 FILES=all                  # the whole release (~7.8 GB zipped, ~29 GB unzipped)
+make run                                                      # bronze → silver → gold
 ```
 
-`COMPETENCIA` is the reference month (YYYY-MM) of the Receita Federal release, kept with its domain name.
+`COMPETENCIA` is the reference month (YYYY-MM) of the Receita Federal release, kept with its domain name. `make download` (RF-01) fetches the zips into `data/raw/<COMPETENCIA>/`, unzips them there and writes `manifest.json` with the source URL, size, SHA-256, download time and extracted files of each zip. It retries transient errors with backoff, resumes partial downloads with HTTP `Range`, and skips files that still match the manifest, so re-runs are idempotent. `FILES` accepts groups (`empresas`, `estabelecimentos`, `socios`, `simples`, `lookups`, `all`) and file names (`Empresas0`, `Cnaes`, ...). It defaults to `lookups`, so downloading the whole release always requires an explicit `FILES=all` (a protection for machines and runners with little disk). The same options exist on the CLI:
+
+```bash
+python -m cnpj_lakehouse.download --competencia 2026-09 --files lookups [--dest data/raw] [--base-url URL]
+```
+
+The source moved to a Nextcloud share in 2026; the current URL, layout, volumes and server behaviour are in [`docs/data-source.md`](docs/data-source.md) ([ADR 007](docs/adr/007-cnpj-source-nextcloud-webdav.md)). If it moves again, set `CNPJ_BASE_URL` (or `--base-url`). On GitHub, the manual **Download** workflow (`Actions → Download → Run workflow`, inputs `competencia` and `files`) downloads a release on a runner and publishes only `manifest.json` and a file listing as an artifact, never the raw data.
 
 For development: `make install` (dependencies + pre-commit hooks), `make lint` and `make test`. Limited memory? Set `SPARK_SAMPLE_FRACTION=0.1` in `.env` to process 10% of the data (RNF-03).
 
@@ -146,7 +154,7 @@ For development: `make install` (dependencies + pre-commit hooks), `make lint` a
 ├── infra/                # docker-compose (Spark + MinIO) and the Spark image
 ├── scripts/              # environment smoke test
 ├── docs/                 # requirements (01–06), benchmark and ADRs
-└── .github/workflows/    # CI
+└── .github/workflows/    # CI and the manual Download workflow
 ```
 
 ## Roadmap
