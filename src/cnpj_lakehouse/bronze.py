@@ -1,1 +1,1 @@
-"""RF-02: ingestão dos CSVs na camada bronze (Delta) com _ingest_ts e _source_file."""
+"""RF-02: CSV ingestion into the bronze layer (Delta) with _ingest_ts and _source_file."""

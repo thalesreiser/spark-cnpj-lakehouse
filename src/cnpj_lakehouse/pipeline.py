@@ -1,1 +1,1 @@
-"""Orquestração bronze -> silver -> gold (Makefile + scripts)."""
+"""Orchestration bronze -> silver -> gold (Makefile + scripts)."""

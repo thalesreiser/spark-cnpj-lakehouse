@@ -1,1 +1,1 @@
-"""RF-03 / RF-04: camada silver tipada, deduplicada e carga incremental por MERGE."""
+"""RF-03 / RF-04: typed, deduplicated silver layer and incremental load with MERGE."""

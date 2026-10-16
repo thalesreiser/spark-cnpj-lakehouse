@@ -1,7 +1,7 @@
 [project]
 name = "cnpj-lakehouse"
 version = "0.1.0"
-description = "Lakehouse com Spark e Delta Lake sobre dados abertos de CNPJ"
+description = "Lakehouse with Spark and Delta Lake on Brazilian CNPJ open data"
 requires-python = ">=3.11,<3.12"
 dependencies = [
   "pyspark==3.5.3",
@@ -37,4 +37,4 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov=cnpj_lakehouse --cov-report=term-missing"
-markers = ["integration: precisa do ambiente Docker"]
+markers = ["integration: requires the Docker environment"]

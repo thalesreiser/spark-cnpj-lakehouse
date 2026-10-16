@@ -4,203 +4,207 @@
 ![Python](https://img.shields.io/badge/python-3.11-3776AB?logo=python&logoColor=white)
 ![Spark](https://img.shields.io/badge/Apache%20Spark-3.5-E25A1C?logo=apachespark&logoColor=white)
 ![Delta Lake](https://img.shields.io/badge/Delta%20Lake-3.2-00ADD4)
-[![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-green)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-> Lakehouse em camadas (bronze → silver → gold) com **Apache Spark** e **Delta Lake** sobre os Dados Abertos de CNPJ da Receita Federal, com carga incremental, histórico auditável e um benchmark documentado do ganho de desempenho obtido com tuning.
+> A layered lakehouse (bronze → silver → gold) built with **Apache Spark** and **Delta Lake** on top of the Brazilian Federal Revenue Service (Receita Federal) CNPJ open data, with incremental loads, auditable history and a documented benchmark of the performance gain obtained through tuning.
 
-**Status:** 🚧 em desenvolvimento · Épico 1 de 7 (Fundações)
-
-> 🇬🇧 **In English:** A medallion lakehouse (bronze → silver → gold) built with **Apache Spark** and **Delta Lake** on top of Brazil's public company registry (CNPJ, tens of millions of records). It covers schema-enforced ingestion, incremental `MERGE` loads, time travel, data quality checks and a documented before/after performance benchmark (target: ≥ 30% faster main job). Runs fully locally with Docker Compose (Spark + MinIO).
+**Status:** 🚧 in progress · epic 2 of 7 (bronze ingestion)
 
 ---
 
-## Por que este projeto existe
+## Why this project exists
 
-O cadastro de CNPJ da Receita Federal é uma das maiores bases públicas do Brasil: dezenas de milhões de empresas e estabelecimentos, além de sócios e tabelas auxiliares (CNAE, municípios, naturezas jurídicas), publicados como CSVs compactados e sem tipagem. É um caso realista para processamento distribuído: volume que não cabe confortavelmente na memória de uma máquina, dados sujos, chaves compostas e atualizações periódicas.
+The Receita Federal CNPJ registry is one of the largest public datasets in Brazil: tens of millions of companies and establishments, plus partners and lookup tables (CNAE activity codes, municipalities, legal natures), published as compressed, untyped CSV files. It is a realistic case for distributed processing: a volume that does not fit comfortably in a single machine's memory, dirty data, composite keys and periodic updates.
 
-O objetivo não é só "rodar Spark", mas mostrar o ciclo completo de um engenheiro de dados:
+The goal is not just "running Spark", but showing the full cycle of a data engineer:
 
-- **Ingerir** com schema explícito e metadados de linhagem
-- **Limpar e modelar** em camadas com regras testáveis
-- **Atualizar incrementalmente** sem duplicar (MERGE)
-- **Medir, otimizar e provar** o ganho com números do Spark UI
+- **Ingest** with an explicit schema and lineage metadata
+- **Clean and model** in layers with testable rules
+- **Update incrementally** without duplicates (MERGE)
+- **Measure, optimize and prove** the gain with numbers from the Spark UI
 
-## Destaques técnicos
+## Technical highlights
 
-| Tema | O que é demonstrado |
+| Topic | What is demonstrated |
 |---|---|
-| **Delta Lake** | Transações ACID, `MERGE` incremental, *time travel* (consulta à versão N-1), evolução de schema, `OPTIMIZE` e `VACUUM` |
-| **Tuning de Spark** | AQE, *broadcast join* das tabelas auxiliares, particionamento por competência e UF, controle de tamanho de arquivo, `repartition` vs `coalesce` |
-| **Benchmark honesto** | Tempo, *shuffle*, *spill* e nº de arquivos antes × depois, com prints do Spark UI. Meta: **≥ 30% de redução** no job principal |
-| **Qualidade de dados** | Checks de unicidade, nulos, domínio e reconciliação silver × gold |
-| **Engenharia de software** | Transformações como funções puras, testes com `chispa`, CI, pre-commit, ADRs |
-| **Portabilidade** | Tudo roda local com Docker Compose (Spark + MinIO com API S3), sem custo de nuvem |
+| **Delta Lake** | ACID transactions, incremental `MERGE`, *time travel* (querying version N-1), schema evolution, `OPTIMIZE` and `VACUUM` |
+| **Spark tuning** | AQE, *broadcast join* of lookup tables, partitioning by reference month and state, file size control, `repartition` vs `coalesce` |
+| **Honest benchmark** | Runtime, *shuffle*, *spill* and number of files before × after, with Spark UI evidence. Target: **at least 30% reduction** in the main job |
+| **Data quality** | Uniqueness, null, domain and silver × gold reconciliation checks |
+| **Software engineering** | Transformations as pure functions, `chispa` tests, CI, pre-commit, ADRs |
+| **Portability** | Everything runs with Docker Compose (Spark + MinIO with an S3 API), with no cloud cost |
 
-## Arquitetura
+## Architecture
 
 ```mermaid
 flowchart LR
-  RF[Receita Federal<br/>CSVs zipados] -->|download.py<br/>+ checksum| RAW[(data/raw/&lt;competência&gt;)]
-  RAW -->|schema explícito<br/>_ingest_ts, _source_file| B[(Bronze<br/>Delta)]
-  B -->|limpeza, tipagem,<br/>deduplicação| S[(Silver<br/>Delta)]
-  S -.->|MERGE incremental| S
-  S -->|agregações| G[(Gold<br/>Delta)]
+  RF[Receita Federal<br/>zipped CSVs] -->|download.py<br/>+ checksum| RAW[(data/raw/&lt;reference month&gt;)]
+  RAW -->|explicit schema<br/>_ingest_ts, _source_file| B[(Bronze<br/>Delta)]
+  B -->|cleaning, typing,<br/>deduplication| S[(Silver<br/>Delta)]
+  S -.->|incremental MERGE| S
+  S -->|aggregations| G[(Gold<br/>Delta)]
   G --> N[Notebook / Spark SQL]
 
   subgraph Docker Compose
     SP[Spark master + workers]
-    M[MinIO<br/>armazenamento S3]
+    M[MinIO<br/>S3 storage]
   end
 ```
 
-| Camada | Conteúdo | Garantia |
+| Layer | Content | Guarantee |
 |---|---|---|
-| **Bronze** | CSVs como vieram, com schema explícito + `_ingest_ts` e `_source_file` | Contagem origem = destino |
-| **Silver** | Dados tipados, normalizados e deduplicados pela chave de negócio | Nenhum CNPJ duplicado; 100% das datas válidas como `date` |
-| **Gold** | Empresas por CNAE, UF, ano de abertura, porte e situação cadastral | Totais reconciliam com a silver |
+| **Bronze** | CSVs as received, with an explicit schema + `_ingest_ts` and `_source_file` | Source row count = target row count |
+| **Silver** | Typed, normalized data, deduplicated on the business key | No duplicated CNPJ; 100% of valid dates typed as `date` |
+| **Gold** | Companies by CNAE, state, year of opening, size and registration status | Totals reconcile with silver |
 
-### Curiosidade: a anatomia de um CNPJ
+### Did you know? The anatomy of a CNPJ
 
-Um CNPJ tem 14 dígitos divididos em três partes, e é assim que a chave de negócio do estabelecimento é montada (regra **RN-01**):
+A CNPJ (the Brazilian company tax ID) has 14 digits split into three parts, and that is how the establishment business key is built (rule **RN-01**):
 
 ```
 12.345.678 / 0001 - 95
-└─ básico ─┘ └ordem┘ └DV┘
-  empresa    matriz   dígitos
-             ou filial verificadores
+└── base ──┘ └order┘ └check┘
+  company    head     check
+             office   digits
+             or branch
 ```
 
-Os 8 primeiros dígitos identificam a **empresa**; a ordem `0001` costuma ser a matriz e as demais, filiais. Por isso a base vem separada em "empresas" (por CNPJ básico) e "estabelecimentos" (por CNPJ completo), e o join entre elas é um dos pontos de tuning do projeto.
+The first 8 digits identify the **company**; order `0001` is usually the head office and the others are branches. That is why the dataset comes split into "companies" (by base CNPJ) and "establishments" (by full CNPJ), and the join between them is one of the tuning points of the project.
 
-### Perguntas que a camada gold responde
+### Questions the gold layer answers
 
-- Quantas empresas foram abertas por ano em cada UF e setor (CNAE)?
-- Como se distribuem as empresas ativas por porte em cada região?
-- Quais setores têm a maior proporção de empresas baixadas ou inaptas?
+- How many companies were opened per year in each state and sector (CNAE)?
+- How are active companies distributed by size in each region?
+- Which sectors have the highest share of closed or inactive companies?
 
 ## Stack
 
-| Camada | Tecnologia | Por quê |
+| Layer | Technology | Why |
 |---|---|---|
-| Processamento | Apache Spark 3.5 (PySpark), AQE habilitado | Padrão de mercado para grandes volumes |
-| Formato de tabela | Delta Lake | ACID, MERGE, time travel, evolução de schema |
-| Armazenamento | MinIO (API S3, fork mantido `pgsty/minio`) | Mesmo código roda depois na AWS, sem custo |
-| Orquestração | Makefile + scripts | Simples e reprodutível (Airflow fica no [P1](https://github.com/thalesreiser/aws-fundos-pipeline)) |
-| Testes | pytest + chispa | Comparação de DataFrames |
-| Qualidade de código | ruff, black, mypy, pre-commit, gitleaks | Padrão comum aos 3 projetos |
-| CI | GitHub Actions | Lint + testes + smoke test do ambiente Docker |
+| Processing | Apache Spark 3.5 (PySpark), AQE enabled | Industry standard for large volumes |
+| Table format | Delta Lake | ACID, MERGE, time travel, schema evolution |
+| Storage | MinIO (S3 API, maintained `pgsty/minio` fork) | The same code later runs on AWS, at no cost |
+| Orchestration | Makefile + scripts | Simple and reproducible (Airflow is covered in [P1](https://github.com/thalesreiser/aws-fundos-pipeline)) |
+| Tests | pytest + chispa | DataFrame comparison |
+| Code quality | ruff, black, mypy, pre-commit, gitleaks | Standard shared by the 3 projects |
+| CI | GitHub Actions | Lint + tests + Docker environment smoke test; also the execution environment for heavy runs ([ADR 006](docs/adr/006-ci-as-execution-environment.md)) |
 
-## Como rodar
+## How to run
 
-### Pré-requisitos
+### Where things run
 
-- **Docker Desktop** (Windows/macOS) ou Docker Engine com o plugin Compose v2 (Linux).
-- **GNU make**. No Windows: `winget install ezwinports.make` (use no Git Bash) ou o `make` do MSYS2/Chocolatey.
-- **RAM:** o padrão (1 worker com 2 cores e 2 GB, executores de 1 GB) cabe numa máquina com ~8 GB. Com mais memória, aumente `SPARK_WORKER_MEMORY`/`SPARK_WORKER_CORES` no `.env`; com pouca, use a amostragem (abaixo).
-- Python 3.11 e Java 17 só são necessários para desenvolver/testar fora dos containers (`make install`, `make test`). O Spark do ambiente roda inteiro em Docker.
+| Where | What |
+|---|---|
+| **Your machine** | Editing, `make lint`, `make test` (unit tests with small DataFrames; needs Python 3.11 and Java 17, no Docker) |
+| **CI on every pull request** | Lint, type-check, tests and the `smoke` job, which builds the image, brings up Spark + MinIO and writes/reads a Delta table |
+| **Manual workflows** | Heavy runs (download, pipeline on a sample, benchmark), added as the pipeline grows |
 
-### Subir, testar e derrubar o ambiente
+The reasons are in [ADR 006](docs/adr/006-ci-as-execution-environment.md). The whole stack can still run locally if you have Docker:
+
+### Run the Docker stack locally (optional)
+
+**Prerequisites:** Docker Desktop (Windows/macOS) or Docker Engine with the Compose v2 plugin (Linux); GNU make (on Windows: `winget install ezwinports.make`); about 8 GB of RAM for the defaults (1 worker with 2 cores and 2 GB, 1 GB executors; adjust `SPARK_WORKER_MEMORY`/`SPARK_WORKER_CORES` in `.env`).
 
 ```bash
-cp .env.example .env   # opcional: credenciais de dev do MinIO e recursos do Spark
-make up                # constrói a imagem Spark, sobe MinIO + Spark master/worker e cria o bucket
-make smoke             # grava e lê uma tabela Delta no MinIO (s3a://lakehouse/_smoke/...)
-make down              # derruba tudo (make down V=1 apaga também o volume do MinIO)
+cp .env.example .env   # optional: MinIO dev credentials and Spark resources
+make up                # builds the Spark image, starts MinIO + Spark master/worker and creates the bucket
+make smoke             # writes and reads a Delta table on MinIO (s3a://lakehouse/_smoke/...)
+make down              # stops everything (make down V=1 also deletes the MinIO volume)
 ```
 
-`make up` espera os *healthchecks* (MinIO vivo, master no ar e worker registrado) e cria o bucket `lakehouse` com o `mc`. O primeiro `make up` leva alguns minutos para construir a imagem. Outros alvos: `make ps` (estado dos serviços) e `make logs`.
+`make up` waits for the *healthchecks* (MinIO alive, master up and worker registered) and creates the `lakehouse` bucket with `mc`. The first `make up` takes a few minutes to build the image. Other targets: `make ps` (service status) and `make logs`.
 
-| Serviço | Endereço |
+| Service | Address |
 |---|---|
 | Spark master (UI) | http://localhost:8080 |
 | Spark worker (UI) | http://localhost:8081 |
 | Spark master (cluster) | `spark://localhost:7077` |
-| MinIO API S3 | http://localhost:9000 |
-| MinIO console | http://localhost:9001 (usuário/senha do `.env`; padrão de dev `minioadmin`) |
+| MinIO S3 API | http://localhost:9000 |
+| MinIO console | http://localhost:9001 (user/password from `.env`; dev default `minioadmin`) |
 
-As aplicações Spark rodam no serviço `spark-client`, que usa a mesma imagem dos executores (Python 3.11, Spark 3.5.3, Delta 3.2.1, hadoop-aws 3.3.4). Os motivos estão no [ADR 005](docs/adr/005-imagens-do-ambiente-docker.md). No código, a sessão vem de `cnpj_lakehouse.spark.get_spark("nome-da-app")`, configurada por variáveis de ambiente (`S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `LAKEHOUSE_BUCKET`, `SPARK_MASTER_URL`).
+Spark applications run in the `spark-client` service, which uses the same image as the executors (Python 3.11, Spark 3.5.3, Delta 3.2.1, hadoop-aws 3.3.4). The reasons are in [ADR 005](docs/adr/005-docker-environment-images.md). In the code, the session comes from `cnpj_lakehouse.spark.get_spark("app-name")`, configured through environment variables (`S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `LAKEHOUSE_BUCKET`, `SPARK_MASTER_URL`).
 
-> As credenciais do MinIO no `.env.example` e no CI são apenas para desenvolvimento local. O `.env` não é versionado.
+> The MinIO credentials in `.env.example` and in CI are for local development only. `.env` is never committed.
 
 ### Pipeline
 
 ```bash
-make download COMPETENCIA=2026-09  # baixa e valida os arquivos do mês
+make download COMPETENCIA=2026-09  # downloads and validates the files of a reference month
 make run                           # bronze → silver → gold
 ```
 
-Para desenvolver: `make install` (dependências + hooks do pre-commit), `make lint` e `make test`.
+`COMPETENCIA` is the reference month (YYYY-MM) of the Receita Federal release, kept with its domain name.
 
-Pouca memória? Defina `SPARK_SAMPLE_FRACTION=0.1` no `.env` para processar 10% dos dados (RNF-03).
+For development: `make install` (dependencies + pre-commit hooks), `make lint` and `make test`. Limited memory? Set `SPARK_SAMPLE_FRACTION=0.1` in `.env` to process 10% of the data (RNF-03).
 
-## Estrutura do repositório
+## Repository layout
 
 ```
-├── src/cnpj_lakehouse/   # download, bronze, silver, gold, pipeline
-├── tests/                # testes unitários (DataFrames pequenos) e fixtures
-├── notebooks/            # time travel e perguntas de negócio
-├── infra/                # docker-compose (Spark + MinIO) e imagem Spark
-├── scripts/              # smoke test do ambiente
-├── docs/                 # requisitos (01–06), benchmark e ADRs
+├── src/cnpj_lakehouse/   # download, bronze, silver, gold, pipeline, Spark session and versions
+├── tests/                # unit tests (small DataFrames) and fixtures
+├── notebooks/            # time travel and business questions
+├── infra/                # docker-compose (Spark + MinIO) and the Spark image
+├── scripts/              # environment smoke test
+├── docs/                 # requirements (01–06), benchmark and ADRs
 └── .github/workflows/    # CI
 ```
 
 ## Roadmap
 
-| Épico | Entrega | Horas | Status |
+| Epic | Deliverable | Hours | Status |
 |---|---|---|---|
-| 1. Fundações | Repositório, ambiente Docker, visão e requisitos | 6 h | 🚧 |
-| 2. Ingestão bronze | Download parametrizado, schemas, Delta com metadados | 8 h | ⬜ |
-| 3. Silver e qualidade | Normalização, deduplicação, testes, quality checks | 10 h | ⬜ |
-| 4. Incremental e histórico | MERGE, idempotência, time travel | 7 h | ⬜ |
-| 5. Gold e análise | Agregações, reconciliação, notebook | 5 h | ⬜ |
-| 6. Otimização e benchmark | Baseline, tuning, OPTIMIZE/VACUUM, `benchmark.md` | 9 h | ⬜ |
-| 7. Publicação | CI, diagramas, ADRs, rastreabilidade, README final | 5 h | ⬜ |
+| 1. Foundations | Repository, Docker environment, vision and requirements | 6 h | ✅ |
+| 2. Bronze ingestion | Parameterized download, schemas, Delta with metadata | 8 h | 🚧 |
+| 3. Silver and quality | Normalization, deduplication, tests, quality checks | 10 h | ⬜ |
+| 4. Incremental and history | MERGE, idempotency, time travel | 7 h | ⬜ |
+| 5. Gold and analysis | Aggregations, reconciliation, notebook | 5 h | ⬜ |
+| 6. Optimization and benchmark | Baseline, tuning, OPTIMIZE/VACUUM, `benchmark.md` | 9 h | ⬜ |
+| 7. Publication | CI, diagrams, ADRs, traceability, final README | 5 h | ⬜ |
 
-## Resultados medidos
+## Measured results
 
-_Serão publicados ao fim do Épico 6 em [`docs/benchmark.md`](docs/benchmark.md), incluindo o resultado real mesmo se a meta de 30% não for atingida._
+_To be published at the end of epic 6 in [`docs/benchmark.md`](docs/benchmark.md), including the actual result even if the 30% target is not reached._
 
-| Métrica | Baseline | Após tuning | Variação |
+| Metric | Baseline | After tuning | Change |
 |---|---|---|---|
-| Tempo do job principal | — | — | — |
+| Main job runtime | — | — | — |
 | Shuffle | — | — | — |
 | Spill | — | — | — |
-| Arquivos por partição | — | — | — |
+| Files per partition | — | — | — |
 
-## Documentação
+## Documentation
 
-O projeto segue um processo de engenharia de requisitos inspirado na ISO/IEC/IEEE 29148:
+The project follows a requirements engineering process inspired by ISO/IEC/IEEE 29148:
 
-| Documento | Conteúdo |
+| Document | Content |
 |---|---|
-| [01 - Visão e escopo](docs/01-visao-e-escopo.md) | Problema, objetivo, escopo e métricas de sucesso |
-| [02 - Análise e priorização](docs/02-analise-e-priorizacao.md) | Requisitos (MoSCoW), regras, restrições e riscos |
-| [03 - Especificação](docs/03-especificacao.md) | User stories em Gherkin e modelo de dados |
-| [04 - Arquitetura](docs/04-arquitetura.md) | C4 simplificado |
-| [05 - Validação](docs/05-validacao.md) | Execução dos critérios de aceite |
-| [06 - Rastreabilidade](docs/06-rastreabilidade.md) | Requisito → componente → teste |
-| [ADRs](docs/adr/) | Decisões de arquitetura com alternativas e consequências |
+| [01 - Vision and scope](docs/01-vision-and-scope.md) | Problem, goal, scope and success metrics |
+| [02 - Analysis and prioritization](docs/02-analysis-and-prioritization.md) | Requirements (MoSCoW), rules, constraints and risks |
+| [03 - Specification](docs/03-specification.md) | User stories in Gherkin and data model |
+| [04 - Architecture](docs/04-architecture.md) | Simplified C4 |
+| [05 - Validation](docs/05-validation.md) | Acceptance criteria execution |
+| [06 - Traceability](docs/06-traceability.md) | Requirement → component → test |
+| [ADRs](docs/adr/) | Architecture decisions with alternatives and consequences |
 
-## Dados e LGPD
+## Data and LGPD
 
-Os dados são públicos e baixados direto da fonte oficial em tempo de execução: **nenhum dado bruto é versionado** neste repositório. Os CPFs de sócios já vêm parcialmente mascarados pela Receita Federal, e é proibido usar o projeto para tentar reidentificar pessoas. Detalhes em [`POLITICA-DE-USO.md`](POLITICA-DE-USO.md).
+The data is public and downloaded straight from the official source at run time: **no raw data is committed** to this repository. Partner CPFs (individual taxpayer IDs) already come partially masked by the Receita Federal, and using the project to try to re-identify people is forbidden. Details in [`USAGE-POLICY.md`](USAGE-POLICY.md).
 
-## Projetos relacionados
+## Related projects
 
-Este é o primeiro de três projetos de engenharia de dados desenvolvidos em sequência:
+This is the first of three data engineering projects developed in sequence:
 
-| # | Projeto | Foco |
+| # | Project | Focus |
 |---|---|---|
-| **P2** | **spark-cnpj-lakehouse** (este) | Processamento distribuído com Spark e Delta Lake |
-| P1 | [aws-fundos-pipeline](https://github.com/thalesreiser/aws-fundos-pipeline) | Pipeline na AWS com Terraform, Airflow e CI/CD |
-| P3 | [dbt-dw-api](https://github.com/thalesreiser/dbt-dw-api) | Data warehouse com dbt, qualidade de dados e API REST |
+| **P2** | **spark-cnpj-lakehouse** (this one) | Distributed processing with Spark and Delta Lake |
+| P1 | [aws-fundos-pipeline](https://github.com/thalesreiser/aws-fundos-pipeline) | AWS pipeline with Terraform, Airflow and CI/CD |
+| P3 | [dbt-dw-api](https://github.com/thalesreiser/dbt-dw-api) | Data warehouse with dbt, data quality and a REST API |
 
-## Licença
+## License
 
-Código sob a licença [MIT](LICENSE): pode ser usado, copiado e modificado, inclusive comercialmente, desde que o aviso de copyright de **Thales Reiser Pedreira** seja mantido. Regras sobre os dados e a segurança estão em [`POLITICA-DE-USO.md`](POLITICA-DE-USO.md).
+Code under the [MIT](LICENSE) license: it may be used, copied and modified, including commercially, as long as the copyright notice of **Thales Reiser Pedreira** is kept. Rules about data and security are in [`USAGE-POLICY.md`](USAGE-POLICY.md).
 
-## Autor
+## Author
 
-**Thales Reiser Pedreira**, Engenheiro de Dados e de Software · Python, SQL, AWS e Big Data.
+**Thales Reiser Pedreira**, Data and Software Engineer · Python, SQL, AWS and Big Data.
 [GitHub](https://github.com/thalesreiser) · [LinkedIn](https://www.linkedin.com/in/thalesreiserpedreira)

@@ -1,6 +1,6 @@
-# RNF-02: ambiente completo local (Spark master + worker + MinIO), sem nuvem paga.
-# RNF-05: versões fixadas (imagem Spark própria em infra/spark, tags exatas do MinIO).
-# Use pelo Makefile (`make up`, `make smoke`, `make down`); variáveis opcionais no `.env`.
+# RNF-02: complete environment (Spark master + worker + MinIO), no paid cloud.
+# RNF-05: pinned versions (project Spark image in infra/spark, exact MinIO tags).
+# Use it through the Makefile (`make up`, `make smoke`, `make down`); optional variables in `.env`.
 name: cnpj-lakehouse
 
 x-spark-image: &spark-image
@@ -11,11 +11,11 @@ x-spark-image: &spark-image
 
 services:
   minio:
-    # Fork comunitário mantido do MinIO (as imagens oficiais saíram do Docker Hub; ver ADR 005).
+    # Maintained community fork of MinIO (the official images left Docker Hub; see ADR 005).
     image: ${MINIO_IMAGE:-pgsty/minio:RELEASE.2026-08-04T00-00-00Z}
     command: server /data --console-address ":9001"
     environment:
-      # Credenciais apenas de desenvolvimento local; sobrescreva no .env.
+      # Local-development credentials only; override them in .env.
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     ports: ["9000:9000", "9001:9001"]
@@ -27,7 +27,7 @@ services:
       retries: 24
 
   minio-init:
-    # Cria o bucket do lakehouse na subida (idempotente).
+    # Creates the lakehouse bucket on startup (idempotent).
     image: ${MC_IMAGE:-pgsty/mc:RELEASE.2026-09-16T00-00-00Z}
     depends_on:
       minio:
@@ -77,12 +77,12 @@ services:
         --host spark-worker --webui-port 8081
         --cores "$${SPARK_WORKER_CORES}" --memory "$${SPARK_WORKER_MEMORY}"
     environment:
-      # Padrão modesto para máquinas com ~8 GB de RAM; ajuste no .env.
+      # Modest defaults for machines with ~8 GB of RAM; adjust them in .env.
       SPARK_WORKER_CORES: ${SPARK_WORKER_CORES:-2}
       SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY:-2g}
     ports: ["8081:8081"]
     healthcheck:
-      # Saudável quando o worker estiver registrado (ALIVE) no master.
+      # Healthy once the worker is registered (ALIVE) with the master.
       test:
         - CMD-SHELL
         - 'curl -fsS http://spark-master:8080/json/ | grep -Eq "\"aliveworkers\" ?: ?[1-9]"'
@@ -91,9 +91,9 @@ services:
       retries: 24
 
   spark-client:
-    # Driver das aplicações (smoke test, pipeline): mesma imagem dos executores.
+    # Application driver (smoke test, pipeline): same image as the executors.
     <<: *spark-image
-    profiles: ["cliente"]
+    profiles: ["client"]
     depends_on:
       spark-worker:
         condition: service_healthy
@@ -101,7 +101,7 @@ services:
         condition: service_healthy
     working_dir: /opt/app
     volumes: ["..:/opt/app"]
-    entrypoint: ["bash", "/opt/app/infra/spark/entrypoint-cliente.sh"]
+    entrypoint: ["bash", "/opt/app/infra/spark/client-entrypoint.sh"]
     environment:
       PYTHONPATH: /opt/app/src
       SPARK_MASTER_URL: spark://spark-master:7077
