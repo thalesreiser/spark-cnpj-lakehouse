@@ -19,3 +19,28 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: make lint
       - run: make test
+
+  # RNF-02 / RNF-05: sobe o ambiente Docker Compose e prova que o Spark grava e lê Delta no MinIO.
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Credenciais apenas de desenvolvimento local/CI (containers efêmeros), não são segredos.
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    steps:
+      - uses: actions/checkout@v4
+      - name: Versões do Docker
+        run: docker version --format '{{.Server.Version}}' && docker compose version
+      - name: make up
+        run: make up
+      - name: Estado dos serviços
+        run: make ps
+      - name: make smoke
+        run: make smoke
+      - name: Logs dos serviços
+        if: always()
+        run: make logs
+      - name: make down
+        if: always()
+        run: make down V=1
