@@ -1,0 +1,40 @@
+[project]
+name = "cnpj-lakehouse"
+version = "0.1.0"
+description = "Lakehouse com Spark e Delta Lake sobre dados abertos de CNPJ"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "pyspark==3.5.3",
+  "delta-spark==3.2.1",
+  "requests>=2.32",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-cov>=5", "chispa>=0.10", "ruff>=0.6", "black>=24", "mypy>=1.11", "pre-commit>=3.8"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.black]
+line-length = 100
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=cnpj_lakehouse --cov-report=term-missing"
+markers = ["integration: precisa do ambiente Docker"]
