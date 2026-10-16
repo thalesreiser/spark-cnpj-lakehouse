@@ -1,23 +1,24 @@
+# COMPETENCIA = reference month of the Receita Federal release (YYYY-MM).
 COMPETENCIA ?= $(shell date +%Y-%m)
-# Usa o .env da raiz, se existir (o compose fica em infra/ e não o enxergaria sozinho).
+# Use the root .env if present (the compose file lives in infra/ and would not see it).
 ENV_FILE := $(if $(wildcard .env),--env-file .env,)
 COMPOSE = docker compose $(ENV_FILE) -f infra/docker-compose.yml
-# Comandos executados no driver (container spark-client), na mesma imagem dos executores.
-SPARK_RUN = $(COMPOSE) --profile cliente run --rm spark-client
+# Commands run in the driver (spark-client container), on the same image as the executors.
+SPARK_RUN = $(COMPOSE) --profile client run --rm spark-client
 
 .PHONY: install up down smoke logs ps download run lint test fmt
 
 install:
 	pip install -e ".[dev]" && pre-commit install
 
-up:  ## RNF-02: sobe MinIO (+ bucket) e Spark master/worker e espera os healthchecks
+up:  ## RNF-02: starts MinIO (+ bucket) and the Spark master/worker, waits for healthchecks
 	$(COMPOSE) up -d --build --wait --wait-timeout 300 minio spark-master spark-worker
 	$(COMPOSE) run --rm minio-init
 
-down:  ## derruba o ambiente (mantém o volume do MinIO; use `make down V=1` para apagar)
-	$(COMPOSE) --profile cliente down --remove-orphans $(if $(V),--volumes,)
+down:  ## stops the environment (keeps the MinIO volume; `make down V=1` deletes it)
+	$(COMPOSE) --profile client down --remove-orphans $(if $(V),--volumes,)
 
-smoke:  ## RNF-02: grava e lê uma tabela Delta no MinIO (s3a) pelo cluster Spark
+smoke:  ## RNF-02: writes and reads a Delta table on MinIO (s3a) through the Spark cluster
 	$(SPARK_RUN) python scripts/smoke_delta.py
 
 logs:

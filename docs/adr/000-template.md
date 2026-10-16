@@ -1,12 +1,12 @@
-# NNN - Título da decisão
+# NNN - Decision title
 
-- **Status:** proposto | aceito | substituído por NNN
-- **Data:** AAAA-MM-DD
+- **Status:** proposed | accepted | superseded by NNN
+- **Date:** YYYY-MM-DD
 
-## Contexto
+## Context
 
-## Decisão
+## Decision
 
-## Alternativas consideradas
+## Alternatives considered
 
-## Consequências
+## Consequences

@@ -14,17 +14,17 @@ coverage.xml
 htmlcov/
 .ipynb_checkpoints/
 
-# Segredos e ambiente local (DoD 5: nenhum segredo no repositório)
+# Secrets and local environment (DoD 5: no secrets in the repository)
 .env
 *.pem
 *.key
 credentials*
 
-# Dados (não versionar dados brutos; apenas amostras em tests/fixtures)
+# Data (never commit raw data; only samples in tests/fixtures)
 data/
 !tests/fixtures/**
 
-# IDE / SO
+# IDE / OS
 .vscode/
 .idea/
 .DS_Store

@@ -1,5 +1,5 @@
 import cnpj_lakehouse
 
 
-def test_pacote_importa() -> None:
+def test_package_imports() -> None:
     assert cnpj_lakehouse.__doc__

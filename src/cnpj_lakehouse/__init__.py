@@ -1,1 +1,1 @@
-"""Lakehouse CNPJ com Spark e Delta Lake."""
+"""CNPJ lakehouse with Spark and Delta Lake."""

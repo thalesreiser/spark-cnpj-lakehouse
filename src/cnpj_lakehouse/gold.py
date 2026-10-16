@@ -1,1 +1,1 @@
-"""RF-05: agregações por CNAE/UF/ano, porte e situação cadastral."""
+"""RF-05: aggregations by CNAE/state/year, company size and registration status."""
