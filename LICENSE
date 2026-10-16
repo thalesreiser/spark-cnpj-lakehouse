@@ -1,21 +1,74 @@
-MIT License
+LICENÇA DE USO PROPRIETÁRIA (TODOS OS DIREITOS RESERVADOS)
+Projeto: spark-cnpj-lakehouse
 
-Copyright (c) 2026 Thales Reiser Pedreira
+Copyright (c) 2026 Thales Reiser Pedreira. Todos os direitos reservados.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. TITULARIDADE
+   O código-fonte, a documentação, os diagramas, os modelos de dados, os
+   scripts, os testes e demais materiais deste repositório (o "Software") são
+   obra intelectual de Thales Reiser Pedreira (o "Autor"), que detém com
+   exclusividade todos os direitos autorais e patrimoniais sobre eles, nos
+   termos da Lei nº 9.610/1998 (Direitos Autorais) e da Lei nº 9.609/1998
+   (Programas de Computador).
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+2. PERMISSÕES CONCEDIDAS
+   Sem necessidade de autorização prévia, qualquer pessoa com acesso a este
+   repositório pode:
+   a) visualizar e ler o Software;
+   b) clonar e executar o Software localmente, exclusivamente para avaliação
+      técnica (por exemplo, processos seletivos, revisão de código ou estudo
+      pessoal sem fins comerciais);
+   c) citar trechos curtos do Software em análises, artigos ou discussões,
+      desde que com atribuição ao Autor e link para este repositório.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+3. RESTRIÇÕES
+   Salvo autorização prévia e por escrito do Autor, é proibido:
+   a) copiar, reproduzir ou redistribuir o Software, no todo ou em parte;
+   b) modificar o Software e publicar ou distribuir obras derivadas;
+   c) usar o Software, no todo ou em parte, para fins comerciais, incluindo
+      sua incorporação em produtos ou serviços de terceiros;
+   d) sublicenciar, vender, alugar ou ceder o Software;
+   e) apresentar o Software, ou obra derivada dele, como de autoria própria,
+      inclusive em portfólios, currículos ou processos seletivos;
+   f) remover ou alterar avisos de autoria, de direitos autorais ou esta
+      licença;
+   g) usar o Software para treinar, ajustar ou avaliar modelos de
+      inteligência artificial.
+
+4. CONTRIBUIÇÕES
+   Ao enviar sugestões, issues ou pull requests, o contribuidor concede ao
+   Autor licença gratuita, irrevogável, mundial e não exclusiva para usar,
+   modificar, sublicenciar e distribuir a contribuição sob quaisquer termos, e
+   declara ter o direito de concedê-la.
+
+5. COMPONENTES E DADOS DE TERCEIROS
+   Bibliotecas, ferramentas e imagens de contêiner de terceiros usadas pelo
+   Software permanecem sob suas próprias licenças. Os dados públicos
+   processados pelo Software pertencem às respectivas fontes e estão sujeitos
+   aos termos delas. Esta licença não abrange esses componentes nem esses
+   dados.
+
+6. AUSÊNCIA DE GARANTIA
+   O SOFTWARE É FORNECIDO "NO ESTADO EM QUE SE ENCONTRA", SEM GARANTIAS DE
+   QUALQUER TIPO, EXPRESSAS OU IMPLÍCITAS, INCLUSIVE DE COMERCIALIZAÇÃO,
+   ADEQUAÇÃO A UMA FINALIDADE ESPECÍFICA OU NÃO VIOLAÇÃO.
+
+7. LIMITAÇÃO DE RESPONSABILIDADE
+   EM NENHUMA HIPÓTESE O AUTOR SERÁ RESPONSÁVEL POR DANOS DIRETOS, INDIRETOS,
+   INCIDENTAIS OU CONSEQUENTES, INCLUINDO CUSTOS DE INFRAESTRUTURA EM NUVEM,
+   PERDA DE DADOS OU LUCROS CESSANTES, DECORRENTES DO USO OU DA
+   IMPOSSIBILIDADE DE USO DO SOFTWARE.
+
+8. RESCISÃO
+   O descumprimento de qualquer termo desta licença encerra automaticamente as
+   permissões concedidas na cláusula 2, sem prejuízo das medidas legais
+   cabíveis.
+
+9. LEI APLICÁVEL E FORO
+   Esta licença é regida pelas leis da República Federativa do Brasil. Fica
+   eleito o foro do domicílio do Autor para dirimir quaisquer controvérsias.
+
+10. AUTORIZAÇÕES
+   Pedidos de uso fora do previsto na cláusula 2 devem ser feitos ao Autor
+   pelo GitHub (https://github.com/thalesreiser) ou pelo LinkedIn
+   (https://www.linkedin.com/in/thalesreiser/).
