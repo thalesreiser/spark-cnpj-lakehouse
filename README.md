@@ -84,18 +84,47 @@ Os 8 primeiros dígitos identificam a **empresa**; a ordem `0001` costuma ser a 
 |---|---|---|
 | Processamento | Apache Spark 3.5 (PySpark), AQE habilitado | Padrão de mercado para grandes volumes |
 | Formato de tabela | Delta Lake | ACID, MERGE, time travel, evolução de schema |
-| Armazenamento | MinIO (API S3) | Mesmo código roda depois na AWS, sem custo |
+| Armazenamento | MinIO (API S3, fork mantido `pgsty/minio`) | Mesmo código roda depois na AWS, sem custo |
 | Orquestração | Makefile + scripts | Simples e reprodutível (Airflow fica no [P1](https://github.com/thalesreiser/aws-fundos-pipeline)) |
 | Testes | pytest + chispa | Comparação de DataFrames |
 | Qualidade de código | ruff, black, mypy, pre-commit, gitleaks | Padrão comum aos 3 projetos |
-| CI | GitHub Actions | Lint + testes com amostra |
+| CI | GitHub Actions | Lint + testes + smoke test do ambiente Docker |
 
 ## Como rodar
 
-**Pré-requisitos:** Docker com Docker Compose, Python 3.11, Java 17 e cerca de 16 GB de RAM (ou use a amostragem, abaixo).
+### Pré-requisitos
+
+- **Docker Desktop** (Windows/macOS) ou Docker Engine com o plugin Compose v2 (Linux).
+- **GNU make**. No Windows: `winget install ezwinports.make` (use no Git Bash) ou o `make` do MSYS2/Chocolatey.
+- **RAM:** o padrão (1 worker com 2 cores e 2 GB, executores de 1 GB) cabe numa máquina com ~8 GB. Com mais memória, aumente `SPARK_WORKER_MEMORY`/`SPARK_WORKER_CORES` no `.env`; com pouca, use a amostragem (abaixo).
+- Python 3.11 e Java 17 só são necessários para desenvolver/testar fora dos containers (`make install`, `make test`). O Spark do ambiente roda inteiro em Docker.
+
+### Subir, testar e derrubar o ambiente
 
 ```bash
-make up                            # sobe Spark + MinIO
+cp .env.example .env   # opcional: credenciais de dev do MinIO e recursos do Spark
+make up                # constrói a imagem Spark, sobe MinIO + Spark master/worker e cria o bucket
+make smoke             # grava e lê uma tabela Delta no MinIO (s3a://lakehouse/_smoke/...)
+make down              # derruba tudo (make down V=1 apaga também o volume do MinIO)
+```
+
+`make up` espera os *healthchecks* (MinIO vivo, master no ar e worker registrado) e cria o bucket `lakehouse` com o `mc`. O primeiro `make up` leva alguns minutos para construir a imagem. Outros alvos: `make ps` (estado dos serviços) e `make logs`.
+
+| Serviço | Endereço |
+|---|---|
+| Spark master (UI) | http://localhost:8080 |
+| Spark worker (UI) | http://localhost:8081 |
+| Spark master (cluster) | `spark://localhost:7077` |
+| MinIO API S3 | http://localhost:9000 |
+| MinIO console | http://localhost:9001 (usuário/senha do `.env`; padrão de dev `minioadmin`) |
+
+As aplicações Spark rodam no serviço `spark-client`, que usa a mesma imagem dos executores (Python 3.11, Spark 3.5.3, Delta 3.2.1, hadoop-aws 3.3.4). Os motivos estão no [ADR 005](docs/adr/005-imagens-do-ambiente-docker.md). No código, a sessão vem de `cnpj_lakehouse.spark.get_spark("nome-da-app")`, configurada por variáveis de ambiente (`S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `LAKEHOUSE_BUCKET`, `SPARK_MASTER_URL`).
+
+> As credenciais do MinIO no `.env.example` e no CI são apenas para desenvolvimento local. O `.env` não é versionado.
+
+### Pipeline
+
+```bash
 make download COMPETENCIA=2026-09  # baixa e valida os arquivos do mês
 make run                           # bronze → silver → gold
 ```
@@ -110,7 +139,8 @@ Pouca memória? Defina `SPARK_SAMPLE_FRACTION=0.1` no `.env` para processar 10% 
 ├── src/cnpj_lakehouse/   # download, bronze, silver, gold, pipeline
 ├── tests/                # testes unitários (DataFrames pequenos) e fixtures
 ├── notebooks/            # time travel e perguntas de negócio
-├── infra/                # docker-compose (Spark + MinIO)
+├── infra/                # docker-compose (Spark + MinIO) e imagem Spark
+├── scripts/              # smoke test do ambiente
 ├── docs/                 # requisitos (01–06), benchmark e ADRs
 └── .github/workflows/    # CI
 ```
