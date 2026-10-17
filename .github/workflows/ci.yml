@@ -44,3 +44,56 @@ jobs:
       - name: make down
         if: always()
         run: make down V=1
+
+  # RF-02 / ADR 006: ingests a real release subset into bronze (Delta on MinIO) and proves that
+  # the bronze row counts equal the source line counts. Only counts are published (RST-01).
+  bronze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      COMPETENCIA: "2026-09"
+      # Empresas1 is ~90 MB zipped; the lookup tables are a few KB (docs/data-source.md).
+      FILES: "lookups Empresas1"
+      # The row-count proof needs every row: no sampling (RNF-03).
+      SPARK_SAMPLE_FRACTION: "1.0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install the package
+        run: pip install -e .
+      - name: make download
+        run: make download COMPETENCIA="$COMPETENCIA" FILES="$FILES" && df -h .
+      - name: make up
+        run: make up
+      - name: make bronze (every downloaded table)
+        run: make bronze COMPETENCIA="$COMPETENCIA"
+      - name: make bronze again (re-run replaces the partition, no duplicates)
+        run: make bronze COMPETENCIA="$COMPETENCIA" TABLES="cnaes motivos"
+      - name: make bronze-check (source lines == bronze rows)
+        run: make bronze-check COMPETENCIA="$COMPETENCIA"
+      - name: Summary
+        if: always()
+        run: |
+          cat build/bronze-check/bronze-check.md >> "$GITHUB_STEP_SUMMARY" || true
+          cat "build/bronze-${COMPETENCIA}.json" build/bronze-check/bronze-check.json || true
+      - name: Upload counts (no data)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bronze-counts-${{ env.COMPETENCIA }}
+          path: |
+            build/bronze-${{ env.COMPETENCIA }}.json
+            build/bronze-check/
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Service logs
+        if: always()
+        run: make logs
+      - name: make down
+        if: always()
+        run: make down V=1

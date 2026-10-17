@@ -41,6 +41,14 @@ Spark reader options (`CSV_READ_OPTIONS`): `header=false`, `sep=;`, `encoding=IS
 
 Bronze reads **every column as a nullable string** (ADR 008); the target type is applied in silver (RF-03). Each bronze field carries its `description` and `target_type` as Spark field metadata.
 
+Every bronze table also has three metadata columns, added by the ingestion (`cnpj_lakehouse/bronze.py`, RF-02):
+
+| Column | Type | Content |
+|---|---|---|
+| `_ingest_ts` | timestamp | Start of the ingestion run (UTC); the same for every row of a run |
+| `_source_file` | string | Path of the source CSV the row was read from (Spark `_metadata.file_path`) |
+| `competencia` | string | Reference month of the release (`YYYY-MM`); partition column ([ADR 002](adr/002-partitioning-by-month-and-state.md)) |
+
 | Target type | Used for | Silver conversion |
 |---|---|---|
 | `string` | names, free text and **every code or identifier** (CNPJ parts, CNAE, municipality, legal nature, qualification, country, status, CEP, phones) | trim; codes keep their leading zeros (`0111301`, `05`, `013`) |
