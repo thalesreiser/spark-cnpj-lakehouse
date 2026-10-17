@@ -47,7 +47,7 @@ from pyspark.sql.types import DateType
 
 from cnpj_lakehouse.bronze import BRONZE_LAYER, INGEST_TS, PARTITION_COLUMN, SOURCE_FILE
 from cnpj_lakehouse.download import parse_competencia
-from cnpj_lakehouse.normalize import CNPJ_LENGTH, apply_silver_types, build_cnpj, is_valid_cnpj
+from cnpj_lakehouse.normalize import CNPJ_LENGTH, apply_silver_types, cnpj_check_digits
 from cnpj_lakehouse.schemas import EMPTY_DATE_VALUES, TABLES, get_table
 from cnpj_lakehouse.spark import LakehouseConfig, get_spark
 
@@ -244,16 +244,21 @@ def type_and_flag(
         missing = missing | F.col(name).isNull()
     typed = typed.withColumn(_KEY_MISSING, missing)
     if rule.key == RN01_KEY:
-        cnpj = build_cnpj("cnpj_basico", "cnpj_ordem", "cnpj_dv")
+        # Built in steps over plain column references: nesting the normalizers inside the
+        # check-digit expression would make the generated code explode (driver OOM).
+        missing = F.col(_KEY_MISSING)
+        cnpj = F.col(CNPJ_COLUMN)
         zero = F.coalesce(cnpj == ZERO_CNPJ, F.lit(False))
-        valid = F.coalesce(is_valid_cnpj(cnpj), F.lit(False))
+        valid = F.coalesce(
+            F.substring(cnpj, 13, 2) == cnpj_check_digits(F.substring(cnpj, 1, 12)), F.lit(False)
+        )
         if options.zero_cnpj_is_invalid:
             valid = valid & ~zero
         typed = (
-            typed.withColumn(CNPJ_COLUMN, cnpj)
+            typed.withColumn(CNPJ_COLUMN, F.concat(*map(F.col, RN01_KEY)))
             .withColumn(CNPJ_VALID_COLUMN, F.when(~missing, valid))
             .withColumn(_CNPJ_ZERO, ~missing & zero)
-            .withColumn(_CNPJ_INVALID, ~missing & ~valid)
+            .withColumn(_CNPJ_INVALID, ~missing & ~F.col(CNPJ_VALID_COLUMN))
         )
     else:
         typed = typed.withColumn(_CNPJ_ZERO, F.lit(False)).withColumn(_CNPJ_INVALID, F.lit(False))
