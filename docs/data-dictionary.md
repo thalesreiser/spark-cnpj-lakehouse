@@ -52,11 +52,33 @@ Every bronze table also has three metadata columns, added by the ingestion (`cnp
 | Target type | Used for | Silver conversion |
 |---|---|---|
 | `string` | names, free text and **every code or identifier** (CNPJ parts, CNAE, municipality, legal nature, qualification, country, status, CEP, phones) | trim; codes keep their leading zeros (`0111301`, `05`, `013`) |
-| `date` | every `data_*` column | `to_date(value, 'yyyyMMdd')`; `""`, `0` and `00000000` become `null` |
+| `date` | every `data_*` column | `yyyyMMdd` parsed from validated parts (no `to_date`, see below); `""`, `0`, `00000000` and impossible dates become `null` |
 | `decimal(20,2)` | `capital_social` | replace `,` with `.` and cast; 18 integer digits leave room for outliers |
-| `array<string>` | `cnae_fiscal_secundaria` | split on `,`; empty becomes an empty array or `null` (silver decision) |
+| `array<string>` | `cnae_fiscal_secundaria` | split on `,`, each code normalized; empty or missing becomes an empty array |
 
 "Nullable = no" marks the business key columns, which must be present in silver.
+
+## Silver normalization rules
+
+Implemented as pure `Column -> Column` functions in `cnpj_lakehouse/normalize.py` (RNF-04; tests in `tests/test_normalize.py`); `apply_silver_types(df, table)` applies them to a bronze DataFrame column by column ([ADR 009](adr/009-alphanumeric-cnpj-and-invalid-values.md)). An invalid value becomes `null` in silver; the original stays in bronze.
+
+| Function | Rule | Examples |
+|---|---|---|
+| `clean_string` | trim, collapse inner whitespace, empty -> `null` (display value, accents kept) | `"  BANCO   DO BRASIL "` -> `BANCO DO BRASIL`; `"  "` -> `null` |
+| `normalize_key` | `clean_string` + accents stripped (`ÁÀÂÃÄ ÉÈÊË ÍÌÎÏ ÓÒÔÕÖ ÚÙÛÜ Ç Ñ`, both cases) + upper case, for joins and comparisons | `" São  Paulo"` -> `SAO PAULO` |
+| `normalize_cnpj_basico` / `_ordem` / `_dv` | masks removed, upper case; numeric values left-padded to 8 / 4 / 2; alphanumeric values (base and order only) must have full width | `191` -> `00000191`; `12abc345` -> `12ABC345`; `ABC` -> `null`; DV `3A` -> `null` |
+| `build_cnpj` | RN-01 key: base + order + DV, `null` if a part is invalid (DV not checked) | (`00000000`, `0001`, `91`) -> `00000000000191` |
+| `normalize_cnpj` / `split_cnpj` | full CNPJ, masked or not -> 14 characters (or its 3 parts); check digits validated by default | `12.abc.345/01de-35` -> `12ABC34501DE35`; `12ABC34501DE36` -> `null` |
+| `cnpj_check_digits` / `is_valid_cnpj` | module 11 over `ascii(char) - 48` (numeric and alphanumeric CNPJ); the flag is `false` for invalid values, `null` only for `null` | `12ABC34501DE` -> `35`; `000000000001` -> `91` |
+| `normalize_cnae` | masks removed, digits only, left-padded to 7 | `0111-3/01` -> `0111301`; `111301` -> `0111301`; `47A1302` -> `null` |
+| `normalize_cnae_list` | split on `,`, each code normalized, invalid and duplicate codes dropped, source order kept; `null`/empty -> `[]` | `"4711302,111301,,XX"` -> `[4711302, 0111301]` |
+| `parse_date` | `yyyyMMdd` -> `date`; `""`, `0`, `00000000`, wrong length, non-digits and impossible dates -> `null` (leap years honoured) | `20240229` -> 2024-02-29; `20251340`, `20250230` -> `null` |
+| `parse_decimal` | `-?\d{1,18}(,\d{1,2})?` -> `decimal(20,2)`; thousand separators, `.` decimals and more than 2 decimals -> `null` | `120000000000,00` -> 120000000000.00; `1.000,50` -> `null` |
+
+**Alphanumeric CNPJ.** From July 2026 the Receita Federal assigns CNPJs whose first 12 characters may contain upper-case letters; the 2 check digits stay numeric and are computed with module 11 over `ascii(char) - 48` (official example `12.ABC.345/01DE-35`). Letters are therefore never stripped from CNPJ values, and the CNPJ is never cast to a number.
+
+**ANSI mode.** In Spark 3.5 `to_date` and `try_to_timestamp` raise on `20251340` when `spark.sql.ansi.enabled=true`, and on `2025011` with the default `spark.sql.legacy.timeParserPolicy=EXCEPTION`. `parse_date` validates year, month and day with arithmetic and only then calls `make_date`, and `parse_decimal` only casts values that match its pattern, so no function raises in either mode (the tests run with ANSI on and off).
+
 
 ## Tables
 
