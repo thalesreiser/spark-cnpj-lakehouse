@@ -1,0 +1,65 @@
+# RST-01: proves that the synthetic CNPJ bases of tests/fixtures do not exist in the real
+# registry, by scanning every base of the real Empresas files of a release (~1.4 GB zipped).
+# Only a counts summary is uploaded; raw data never leaves the runner.
+name: Fixture privacy
+
+on:
+  pull_request:
+    paths:
+      - "tests/fixtures/**"
+      - "scripts/check_fixture_cnpjs.py"
+      - ".github/workflows/fixture-privacy.yml"
+  workflow_dispatch:
+    inputs:
+      competencia:
+        description: "Reference month (COMPETENCIA), YYYY-MM; default: the previous month"
+        required: false
+  # Monthly re-check against the newest release: the Receita may assign a fixture base later.
+  # Scheduled workflows only run from the default branch.
+  schedule:
+    - cron: "0 6 20 * *"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install the package
+        run: pip install -e .
+      - name: Reference month
+        run: |
+          competencia="${{ inputs.competencia }}"
+          if [ -z "$competencia" ]; then
+            if [ "${{ github.event_name }}" = "pull_request" ]; then
+              competencia="2026-09"  # fixed, already published release
+            else
+              competencia="$(date -u -d "$(date -u +%Y-%m-15) -1 month" +%Y-%m)"
+            fi
+          fi
+          echo "COMPETENCIA=$competencia" >> "$GITHUB_ENV"
+          echo "Release: $competencia"
+      - name: make download (Empresas only)
+        run: make download COMPETENCIA="$COMPETENCIA" FILES=empresas && df -h .
+      - name: Scan the real bases for the fixture bases
+        run: python scripts/check_fixture_cnpjs.py --competencia "$COMPETENCIA" --summary build/fixture-cnpjs.json
+      - name: Summary
+        if: always()
+        run: |
+          [ -f build/fixture-cnpjs.json ] || exit 0
+          { echo '```json'; cat build/fixture-cnpjs.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload the summary (counts only)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fixture-cnpjs-${{ env.COMPETENCIA }}
+          path: build/fixture-cnpjs.json
+          retention-days: 30
+          if-no-files-found: ignore
