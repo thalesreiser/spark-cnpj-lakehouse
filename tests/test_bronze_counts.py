@@ -2,11 +2,13 @@
 
 The fixture is laid out like a ``make download`` output: ``2026-09/`` holds the extracted CSVs
 and a ``manifest.json`` in the `cnpj_lakehouse.download` format, so the test goes through the
-real entry path (`bronze.run` reading the manifest). Every record is synthetic (RST-01): fake CNPJ
-roots (``9000xxxx``) and invented names. The files keep the real format: Latin-1, ``;``, every
-field quoted, doubled inner quotes, a quoted ``;``, empty ``""`` fields and the three forms of a
-missing date (``00000000``, ``0``, empty). The manifest checksums are of the CSVs (there are no
-zips in the fixture). Parquet is written here; the Delta path is proven by the CI ``bronze`` job.
+real entry path (`bronze.run` reading the manifest). Every record is synthetic (RST-01): CNPJ
+roots from a block proven absent from the real registry and invented company names (see
+``tests/fixtures/README.md``). The files keep the real format: Latin-1, ``;``, every field quoted,
+doubled inner quotes, a quoted ``;``, empty ``""`` fields and the three forms of a missing date
+(``00000000``, ``0``, empty). Unlike `cnpj_lakehouse.download`, where they describe the zips, the
+manifest ``size_bytes``/``sha256`` here describe the extracted CSVs (the fixture has no zips).
+Parquet is written here; the Delta path is proven by the CI ``bronze`` job.
 """
 
 from __future__ import annotations
@@ -150,3 +152,18 @@ def test_bronze_rerun_replaces_the_month_without_duplicates(
         assert report.rows_written == df.count() == EXPECTED_LINES[report.table]
         stamps = {r[0] for r in df.select(F.col(INGEST_TS).cast("string")).collect()}
         assert stamps == {"2026-10-17 10:00:00"}
+
+
+@needs_hadoop_fs
+def test_bronze_keeps_quoted_values_and_latin1_text(spark: SparkSession, tmp_path: Path) -> None:
+    out = tmp_path / "bronze"
+    run(spark, COMPETENCIA, FIXTURE_RAW, str(out), fmt="parquet", tables=["empresas", "cnaes"])
+
+    names = {r[0] for r in _month(spark, out, "empresas").select("razao_social").collect()}
+    assert 'OFICINA "BOA VIAGEM" ME' in names  # doubled inner quotes are unescaped
+    assert "COMÉRCIO; SERVIÇOS & CIA EXEMPLO" in names  # a quoted ";" stays in the value
+    assert 'LOJA "O BARATÃO"; FILIAL ÚNICA' in names
+    assert "AÇAÍ & PÃO DE QUEIJO FICTÍCIOS EIRELI" in names  # Latin-1 decoded, not mojibake
+    assert not any("�" in n or "Ã" in n for n in names if n)
+    cnaes = {r[0] for r in _month(spark, out, "cnaes").select("descricao").collect()}
+    assert 'Restaurantes e similares "à la carte"' in cnaes

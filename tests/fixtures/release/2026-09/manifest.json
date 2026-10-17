@@ -18,7 +18,7 @@
       "name": "Empresas0.zip",
       "url": "https://example.invalid/synthetic-fixture/2026-09/Empresas0.zip",
       "size_bytes": 429,
-      "sha256": "72a728e0469148d95b6b2eeed74f9319488214da564b4d8e145759b933cee133",
+      "sha256": "29e618bba68201d7d9c8f2817dfac448741b21846ba31da4f380a679670c20d6",
       "downloaded_at": "2026-10-17T00:00:00Z",
       "extracted": [
         "K3241.K03200Y0.D60912.EMPRECSV"
@@ -27,8 +27,8 @@
     {
       "name": "Empresas1.zip",
       "url": "https://example.invalid/synthetic-fixture/2026-09/Empresas1.zip",
-      "size_bytes": 275,
-      "sha256": "2f45603e1b5fbb268cdd3ff29a22915f851f2c6fe7f6f71601d75f1d33181290",
+      "size_bytes": 287,
+      "sha256": "26b3de608862f2c26c96cfefcb3dc8c79531836a7ec5c0305e583749c5091ba7",
       "downloaded_at": "2026-10-17T00:00:00Z",
       "extracted": [
         "K3241.K03200Y1.D60912.EMPRECSV"
@@ -38,7 +38,7 @@
       "name": "Simples.zip",
       "url": "https://example.invalid/synthetic-fixture/2026-09/Simples.zip",
       "size_bytes": 260,
-      "sha256": "f7fd983b922424de4afe3d3a5e7028df6b9f38d37fab2dd65d6afd6be48000c1",
+      "sha256": "a8f47cd1b8a944b17f9327d7c15add8aba8f60ace1f511f530b73a26e8e9d1f8",
       "downloaded_at": "2026-10-17T00:00:00Z",
       "extracted": [
         "F.K03200$W.SIMPLES.CSV.D60912"
