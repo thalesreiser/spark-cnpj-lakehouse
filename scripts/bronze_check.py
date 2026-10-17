@@ -30,22 +30,11 @@ from cnpj_lakehouse.bronze import (
     INGEST_TS,
     PARTITION_COLUMN,
     SOURCE_FILE,
+    count_source_lines,
     source_files_by_table,
 )
 from cnpj_lakehouse.download import MANIFEST_NAME, competencia_dir, load_manifest
 from cnpj_lakehouse.spark import LakehouseConfig, get_spark
-
-
-def count_source_lines(paths: list[Path]) -> tuple[int, int]:
-    """Non-empty lines and lines with an odd number of quotes of the given files."""
-    lines = odd_quotes = 0
-    for path in paths:
-        with path.open("rb") as handle:
-            for raw in handle:
-                if raw.strip():
-                    lines += 1
-                    odd_quotes += raw.count(b'"') % 2
-    return lines, odd_quotes
 
 
 def main() -> int:
