@@ -67,13 +67,15 @@ def scan_real_bases(paths: Iterable[Path]) -> tuple[bytearray, dict[str, int]]:
 
 
 def free_blocks(present: bytearray, size: int, starts: Iterable[int]) -> list[str]:
-    """First run of ``size`` free bases at or after each start (as ``first-last``)."""
+    """First run of ``size`` free bases at or after each start (``first-last``, no repeats)."""
     needle = bytes(size)
     blocks = []
     for start in starts:
         found = present.find(needle, start)
         if found >= 0:
-            blocks.append(f"{found:08d}-{found + size - 1:08d}")
+            block = f"{found:08d}-{found + size - 1:08d}"
+            if block not in blocks:
+                blocks.append(block)
     return blocks
 
 
