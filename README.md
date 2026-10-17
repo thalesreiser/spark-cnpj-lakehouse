@@ -148,7 +148,7 @@ For development: `make install` (dependencies + pre-commit hooks), `make lint` a
 ## Repository layout
 
 ```
-├── src/cnpj_lakehouse/   # download, bronze, silver, gold, pipeline, Spark session and versions
+├── src/cnpj_lakehouse/   # download, schemas, bronze, silver, gold, pipeline, Spark session and versions
 ├── tests/                # unit tests (small DataFrames) and fixtures
 ├── notebooks/            # time travel and business questions
 ├── infra/                # docker-compose (Spark + MinIO) and the Spark image
@@ -192,6 +192,8 @@ The project follows a requirements engineering process inspired by ISO/IEC/IEEE 
 | [04 - Architecture](docs/04-architecture.md) | Simplified C4 |
 | [05 - Validation](docs/05-validation.md) | Acceptance criteria execution |
 | [06 - Traceability](docs/06-traceability.md) | Requirement → component → test |
+| [Data source](docs/data-source.md) | Where the CNPJ data lives, server behaviour and release layout |
+| [Data dictionary](docs/data-dictionary.md) | Tables, columns, target types and CSV format of the CNPJ open data |
 | [ADRs](docs/adr/) | Architecture decisions with alternatives and consequences |
 
 ## Data and LGPD
