@@ -45,8 +45,9 @@ jobs:
         if: always()
         run: make down V=1
 
-  # RF-02 / ADR 006: ingests a real release subset into bronze (Delta on MinIO) and proves that
-  # the bronze row counts equal the source line counts. Only counts are published (RST-01).
+  # RF-02 / RF-03 / ADR 006: ingests a real release subset into bronze (Delta on MinIO), proves
+  # that the bronze row counts equal the source line counts, then builds silver from it and proves
+  # that no business key is duplicated. Only counts are published (RST-01).
   bronze:
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -76,11 +77,17 @@ jobs:
         run: make bronze COMPETENCIA="$COMPETENCIA" TABLES="cnaes motivos"
       - name: make bronze-check (source lines == bronze rows)
         run: make bronze-check COMPETENCIA="$COMPETENCIA"
+      - name: make silver (every bronze table)
+        run: make silver COMPETENCIA="$COMPETENCIA"
+      - name: make silver-check (no duplicated business key, dates typed, counts reconciled)
+        run: make silver-check COMPETENCIA="$COMPETENCIA"
       - name: Summary
         if: always()
         run: |
           cat build/bronze-check/bronze-check.md >> "$GITHUB_STEP_SUMMARY" || true
+          cat build/silver-check/silver-check.md >> "$GITHUB_STEP_SUMMARY" || true
           cat "build/bronze-${COMPETENCIA}.json" build/bronze-check/bronze-check.json || true
+          cat "build/silver-${COMPETENCIA}.json" build/silver-check/silver-check.json || true
       - name: Upload counts (no data)
         if: always()
         uses: actions/upload-artifact@v4
@@ -89,6 +96,8 @@ jobs:
           path: |
             build/bronze-${{ env.COMPETENCIA }}.json
             build/bronze-check/
+            build/silver-${{ env.COMPETENCIA }}.json
+            build/silver-check/
           retention-days: 30
           if-no-files-found: warn
       - name: Service logs
