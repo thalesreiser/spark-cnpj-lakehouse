@@ -1,6 +1,8 @@
 # RNF-02: complete environment (Spark master + worker + MinIO), no paid cloud.
 # RNF-05: pinned versions (project Spark image in infra/spark, exact MinIO tags).
 # Use it through the Makefile (`make up`, `make smoke`, `make down`); optional variables in `.env`.
+# Host ports are bound to 127.0.0.1 only: the services use development credentials and the
+# Spark master accepts unauthenticated jobs, so they must not be reachable from the network.
 name: cnpj-lakehouse
 
 x-spark-image: &spark-image
@@ -18,7 +20,7 @@ services:
       # Local-development credentials only; override them in .env.
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
-    ports: ["9000:9000", "9001:9001"]
+    ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]
     volumes: ["minio-data:/data"]
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:9000/minio/health/live"]
@@ -56,7 +58,7 @@ services:
       - "7077"
       - --webui-port
       - "8080"
-    ports: ["8080:8080", "7077:7077"]
+    ports: ["127.0.0.1:8080:8080", "127.0.0.1:7077:7077"]
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/json/"]
       interval: 5s
@@ -80,7 +82,7 @@ services:
       # Modest defaults for machines with ~8 GB of RAM; adjust them in .env.
       SPARK_WORKER_CORES: ${SPARK_WORKER_CORES:-2}
       SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY:-2g}
-    ports: ["8081:8081"]
+    ports: ["127.0.0.1:8081:8081"]
     # Executors read the source CSVs (data/raw) at the same path as the driver (read-only).
     volumes: ["..:/opt/app:ro"]
     healthcheck:
