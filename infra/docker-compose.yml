@@ -81,6 +81,8 @@ services:
       SPARK_WORKER_CORES: ${SPARK_WORKER_CORES:-2}
       SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY:-2g}
     ports: ["8081:8081"]
+    # Executors read the source CSVs (data/raw) at the same path as the driver (read-only).
+    volumes: ["..:/opt/app:ro"]
     healthcheck:
       # Healthy once the worker is registered (ALIVE) with the master.
       test:
