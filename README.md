@@ -96,7 +96,7 @@ The first 8 digits identify the **company**; order `0001` is usually the head of
 | Where | What |
 |---|---|
 | **Your machine** | Editing, `make lint`, `make test` (unit tests with small DataFrames; needs Python 3.11 and Java 17, no Docker) |
-| **CI on every pull request** | Lint, type-check, tests and the `smoke` job, which builds the image, brings up Spark + MinIO and writes/reads a Delta table |
+| **CI on every pull request** | Lint, type-check, tests; the `smoke` job, which builds the image, brings up Spark + MinIO and writes/reads a Delta table; and the `bronze` job, which ingests a real release subset into bronze and reconciles the row counts |
 | **Manual workflows** | Heavy runs: the `Download` workflow (a reference month from the real source, manifest as an artifact); pipeline on a sample and benchmark as the pipeline grows |
 
 The reasons are in [ADR 006](docs/adr/006-ci-as-execution-environment.md). The whole stack can still run locally if you have Docker:
@@ -142,6 +142,25 @@ python -m cnpj_lakehouse.download --competencia 2026-09 --files lookups [--dest 
 ```
 
 The source moved to a Nextcloud share in 2026; the current URL, layout, volumes and server behaviour are in [`docs/data-source.md`](docs/data-source.md) ([ADR 007](docs/adr/007-cnpj-source-nextcloud-webdav.md)). If it moves again, set `CNPJ_BASE_URL` (or `--base-url`). On GitHub, the manual **Download** workflow (`Actions → Download → Run workflow`, inputs `competencia` and `files`) downloads a release on a runner and publishes only `manifest.json` and a file listing as an artifact, never the raw data.
+
+#### Bronze ingestion (RF-02)
+
+```bash
+make up
+make bronze COMPETENCIA=2026-09                        # every table downloaded for the month
+make bronze COMPETENCIA=2026-09 TABLES="empresas cnaes" # a subset
+make bronze-check COMPETENCIA=2026-09                  # source line counts == bronze row counts
+```
+
+`make bronze` runs `python -m cnpj_lakehouse.bronze` in the `spark-client` container (the Spark worker mounts the repository read-only, so executors read `data/raw/` at the same path). For each table listed in `manifest.json` it:
+
+1. **checks the layout:** counts the `;`-separated fields of every raw line, ignoring `;` inside quoted values (doubled quotes honoured). With a fixed schema Spark would silently drop extra fields and null missing ones, so any line with a different field count fails the run and the log shows the field-count histogram and examples (`--max-bad-lines N` tolerates N lines; [ADR 008](docs/adr/008-bronze-all-strings-typed-in-silver.md));
+2. reads the CSVs with the explicit bronze schema (every column a string, no `inferSchema`) and adds `_ingest_ts` (one UTC timestamp per run), `_source_file` (path of the source CSV) and `competencia`;
+3. samples the rows when `SPARK_SAMPLE_FRACTION` < 1 (fixed seed, so the sample is reproducible; RNF-03);
+4. writes Delta to `s3a://<bucket>/bronze/<table>/`, partitioned by `competencia`; re-running a month replaces its partition (`replaceWhere`), never duplicates it ([ADR 002](docs/adr/002-partitioning-by-month-and-state.md));
+5. logs rows read and written (and whether sampling was applied) and writes a summary to `build/bronze-<COMPETENCIA>.json`.
+
+On every pull request the CI `bronze` job downloads `lookups` + `Empresas1` of 2026-09, ingests them, re-runs two tables and checks with `scripts/bronze_check.py` that every bronze partition has exactly as many rows as its source CSVs have lines, with `_ingest_ts` and `_source_file` always filled. It publishes only the counts (job summary and artifact).
 
 For development: `make install` (dependencies + pre-commit hooks), `make lint` and `make test`. Limited memory? Set `SPARK_SAMPLE_FRACTION=0.1` in `.env` to process 10% of the data (RNF-03).
 
