@@ -162,6 +162,18 @@ make bronze-check COMPETENCIA=2026-09                  # source line counts == b
 
 On every pull request the CI `bronze` job downloads `lookups` + `Empresas1` of 2026-09, ingests them, re-runs two tables and checks with `scripts/bronze_check.py` that every bronze partition has exactly as many rows as its source CSVs have lines, with `_ingest_ts` and `_source_file` always filled. It publishes only the counts (job summary and artifact).
 
+#### Silver: types and deduplication (RF-03)
+
+```bash
+make silver COMPETENCIA=2026-09                         # every bronze table with rows for the month
+make silver COMPETENCIA=2026-09 TABLES="empresas cnaes"  # a subset
+make silver-check COMPETENCIA=2026-09                   # no duplicated business key, dates typed
+```
+
+`make silver` runs `python -m cnpj_lakehouse.silver` in the `spark-client` container. For each table it reads the month's bronze partition, applies the documented types (CNPJ incl. alphanumeric, CNAE, dates, money; [ADR 009](docs/adr/009-alphanumeric-cnpj-and-invalid-values.md)), discards rows without a business key, keeps **one current record per business key** with a window function (RN-01 base + order + DV for `estabelecimentos`, `cnpj_basico` for `empresas` and `simples`, a natural key for `socios`, `codigo` for the lookups; a later release, then the most recent relevant date, then `_ingest_ts`, with a deterministic final tie-breaker) and writes Delta to `s3a://<bucket>/silver/<table>/`, partitioned by `competencia` (re-runs replace the month). Establishments get `cnpj` and a `cnpj_valido` flag; invalid CNPJs are kept flagged by default (`--invalid-cnpj drop` discards them; [ADR 010](docs/adr/010-invalid-and-all-zero-cnpj-in-silver.md), proposed). Rows in and out, duplicates removed, rows without key, invalid CNPJs and date parse failures are logged and written to `build/silver-<COMPETENCIA>.json`. The keys and ordering per table are in the [data dictionary](docs/data-dictionary.md#silver-keys-and-current-record).
+
+The CI `bronze` job then runs `make silver` on the same 2026-09 subset and `scripts/silver_check.py`, which fails if any business key appears twice, if a date column is not typed `date` or if a valid source date was lost.
+
 For development: `make install` (dependencies + pre-commit hooks), `make lint` and `make test`. Limited memory? Set `SPARK_SAMPLE_FRACTION=0.1` in `.env` to process 10% of the data (RNF-03).
 
 ## Repository layout
@@ -182,7 +194,7 @@ For development: `make install` (dependencies + pre-commit hooks), `make lint` a
 |---|---|---|---|
 | 1. Foundations | Repository, Docker environment, vision and requirements | 6 h | ✅ |
 | 2. Bronze ingestion | Parameterized download, schemas, Delta with metadata | 8 h | 🚧 |
-| 3. Silver and quality | Normalization, deduplication, tests, quality checks | 10 h | ⬜ |
+| 3. Silver and quality | Normalization, deduplication, tests, quality checks | 10 h | 🚧 |
 | 4. Incremental and history | MERGE, idempotency, time travel | 7 h | ⬜ |
 | 5. Gold and analysis | Aggregations, reconciliation, notebook | 5 h | ⬜ |
 | 6. Optimization and benchmark | Baseline, tuning, OPTIMIZE/VACUUM, `benchmark.md` | 9 h | ⬜ |
