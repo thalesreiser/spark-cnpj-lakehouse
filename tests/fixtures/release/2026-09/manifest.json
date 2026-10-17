@@ -1,0 +1,48 @@
+{
+  "competencia": "2026-09",
+  "base_url": "https://example.invalid/synthetic-fixture",
+  "generated_at": "2026-10-17T00:00:00Z",
+  "algorithm": "sha256",
+  "files": [
+    {
+      "name": "Cnaes.zip",
+      "url": "https://example.invalid/synthetic-fixture/2026-09/Cnaes.zip",
+      "size_bytes": 151,
+      "sha256": "e1d418e79060ac8eb7d7812893dc6b73e923c597bac0420c891487bdeb99b5e3",
+      "downloaded_at": "2026-10-17T00:00:00Z",
+      "extracted": [
+        "F.K03200$Z.D60912.CNAECSV"
+      ]
+    },
+    {
+      "name": "Empresas0.zip",
+      "url": "https://example.invalid/synthetic-fixture/2026-09/Empresas0.zip",
+      "size_bytes": 429,
+      "sha256": "72a728e0469148d95b6b2eeed74f9319488214da564b4d8e145759b933cee133",
+      "downloaded_at": "2026-10-17T00:00:00Z",
+      "extracted": [
+        "K3241.K03200Y0.D60912.EMPRECSV"
+      ]
+    },
+    {
+      "name": "Empresas1.zip",
+      "url": "https://example.invalid/synthetic-fixture/2026-09/Empresas1.zip",
+      "size_bytes": 275,
+      "sha256": "2f45603e1b5fbb268cdd3ff29a22915f851f2c6fe7f6f71601d75f1d33181290",
+      "downloaded_at": "2026-10-17T00:00:00Z",
+      "extracted": [
+        "K3241.K03200Y1.D60912.EMPRECSV"
+      ]
+    },
+    {
+      "name": "Simples.zip",
+      "url": "https://example.invalid/synthetic-fixture/2026-09/Simples.zip",
+      "size_bytes": 260,
+      "sha256": "f7fd983b922424de4afe3d3a5e7028df6b9f38d37fab2dd65d6afd6be48000c1",
+      "downloaded_at": "2026-10-17T00:00:00Z",
+      "extracted": [
+        "F.K03200$W.SIMPLES.CSV.D60912"
+      ]
+    }
+  ]
+}

@@ -5,3 +5,5 @@ Makefile    text eol=lf
 Dockerfile  text eol=lf
 *.yml       text eol=lf
 *.py        text eol=lf
+# Fixtures are byte-exact source samples (Latin-1 CSVs): never convert line endings or encoding.
+tests/fixtures/** -text
