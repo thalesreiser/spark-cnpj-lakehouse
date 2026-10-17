@@ -37,6 +37,18 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+      - name: Validate the inputs
+        # COMPETENCIA and FILES end up unquoted in a make recipe: reject anything that is not a
+        # reference month or a list of file/group names before they reach a shell.
+        run: |
+          if ! [[ "$COMPETENCIA" =~ ^[0-9]{4}-(0[1-9]|1[0-2])$ ]]; then
+            echo "::error::competencia must be YYYY-MM"
+            exit 1
+          fi
+          if ! [[ "$FILES" =~ ^[A-Za-z0-9.,\ ]+$ ]]; then
+            echo "::error::files may only contain letters, digits, dots, commas and spaces"
+            exit 1
+          fi
       - name: Install the package
         run: pip install -e .
       - name: Disk space before
