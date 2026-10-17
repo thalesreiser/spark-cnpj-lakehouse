@@ -157,6 +157,22 @@ def source_files_by_table(
     return {name: sorted(found[name]) for name in TABLES if name in found}
 
 
+def count_source_lines(paths: Iterable[Path]) -> tuple[int, int]:
+    """Non-empty lines and lines with an odd number of quotes of the given files.
+
+    Plain Python, independent of Spark's CSV reader: the source side of the RF-02 row-count
+    proof. An odd quote count would reveal a quoted line break (one record over several lines).
+    """
+    lines = odd_quotes = 0
+    for path in paths:
+        with path.open("rb") as handle:
+            for raw in handle:
+                if raw.strip():
+                    lines += 1
+                    odd_quotes += raw.count(b'"') % 2
+    return lines, odd_quotes
+
+
 def field_count(line: Column) -> Column:
     """Number of ``;``-separated fields of a raw CSV line, ignoring ``;`` inside quoted values."""
     separators_only = F.regexp_replace(line, _QUOTED_VALUE, "")
