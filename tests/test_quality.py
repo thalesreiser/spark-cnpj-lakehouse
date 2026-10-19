@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import os
 import sys
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 from unittest import mock
@@ -42,19 +41,6 @@ needs_hadoop_fs = pytest.mark.skipif(
 )
 
 COMPETENCIA = "2026-09"
-
-
-@pytest.fixture(scope="module")
-def spark() -> Iterator[SparkSession]:
-    session = (
-        SparkSession.builder.master("local[1]")
-        .appName("test-quality")
-        .config("spark.ui.enabled", "false")
-        .config("spark.sql.shuffle.partitions", "2")
-        .getOrCreate()
-    )
-    yield session
-    session.stop()
 
 
 def frame(spark: SparkSession, table: str, rows: list[dict[str, Any]]) -> DataFrame:
