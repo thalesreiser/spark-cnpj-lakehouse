@@ -126,6 +126,22 @@ jobs:
             build/silver-check*/
           retention-days: 30
           if-no-files-found: warn
+      # RF-03 quality checks (task 3.4): blocking `error` rules fail the job; counts only (RST-01).
+      - name: make quality (nulls, domains, uniqueness; error rules block)
+        run: make quality COMPETENCIA="$COMPETENCIA"
+      - name: Quality report summary
+        if: always()
+        run: |
+          cat "build/quality-${COMPETENCIA}/quality.md" >> "$GITHUB_STEP_SUMMARY" || true
+          cat "build/quality-${COMPETENCIA}/quality.json" || true
+      - name: Upload quality report (no data)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-${{ env.COMPETENCIA }}
+          path: build/quality-${{ env.COMPETENCIA }}/
+          retention-days: 30
+          if-no-files-found: warn
       - name: Service logs
         if: always()
         run: make logs

@@ -14,7 +14,7 @@ COMPOSE = docker compose $(ENV_FILE) -f infra/docker-compose.yml
 # Commands run in the driver (spark-client container), on the same image as the executors.
 SPARK_RUN = $(COMPOSE) --profile client run --rm spark-client
 
-.PHONY: install up down smoke logs ps download bronze bronze-check silver silver-check run lint test fmt
+.PHONY: install up down smoke logs ps download bronze bronze-check silver silver-check quality run lint test fmt
 
 install:
 	pip install -e ".[dev]" && pre-commit install
@@ -51,6 +51,10 @@ silver:  ## RF-03: bronze -> typed, deduplicated s3a://<bucket>/silver/<table>/ 
 
 silver-check:  ## RF-03 proof: no duplicated business key, date columns typed, counts reconciled
 	$(SPARK_RUN) python scripts/silver_check.py --competencia $(COMPETENCIA) 		--summary build/silver-$(COMPETENCIA).json --out build/silver-check
+
+quality:  ## RF-03: quality checks of silver (nulls, domains, uniqueness); fails on `error` rules
+	$(SPARK_RUN) python -m cnpj_lakehouse.quality --competencia $(COMPETENCIA) \
+		$(if $(strip $(TABLES)),--tables $(TABLES),) --report build/quality-$(COMPETENCIA)
 
 run:
 	python -m cnpj_lakehouse.pipeline --competencia $(COMPETENCIA)
