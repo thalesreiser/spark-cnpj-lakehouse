@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import os
 import sys
-from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -51,20 +50,6 @@ EMPRESAS_ROWS = [
     '"00000002";"CAFÉ; AÇÚCAR & CIA";"1031";"49";"1000,50";"03";"SÃO PAULO - SP"',
 ]
 CNAES_ROWS = ['"0111301";"Cultivo de arroz"', '"8888888";"Atividade não informada"']
-
-
-@pytest.fixture(scope="module")
-def spark() -> Iterator[SparkSession]:
-    session = (
-        SparkSession.builder.master("local[1]")
-        .appName("test-bronze")
-        .config("spark.ui.enabled", "false")
-        .config("spark.sql.shuffle.partitions", "1")
-        .config("spark.sql.session.timeZone", "UTC")
-        .getOrCreate()
-    )
-    yield session
-    session.stop()
 
 
 def _write_latin1(path: Path, rows: list[str]) -> Path:
