@@ -276,7 +276,7 @@ def test_main_returns_1_when_there_is_nothing_to_check(tmp_path: Path) -> None:
 
 
 @needs_hadoop_fs
-def test_run_reads_the_month_and_the_lookups(spark: SparkSession, tmp_path: Path) -> None:
+def test_run_reads_the_current_state_and_the_lookups(spark: SparkSession, tmp_path: Path) -> None:
     root = tmp_path / "silver"
     lookup(spark, "naturezas", "2062").write.partitionBy(PARTITION_COLUMN).parquet(
         str(root / "naturezas")
@@ -294,5 +294,7 @@ def test_run_reads_the_month_and_the_lookups(spark: SparkSession, tmp_path: Path
     ]
     with pytest.raises(ValueError, match="socios"):
         quality.run(spark, COMPETENCIA, str(root), ["socios"], fmt="parquet")
+    # ADR 011: rows keep the month of their last change, so a later run still checks them.
+    assert quality.run(spark, "2026-10", str(root), ["empresas"], fmt="parquet").ok
     with pytest.raises(ValueError, match="no silver table"):
-        quality.run(spark, "2026-08", str(root), fmt="parquet")
+        quality.run(spark, COMPETENCIA, str(tmp_path / "empty"), fmt="parquet")

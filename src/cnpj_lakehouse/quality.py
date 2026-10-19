@@ -43,7 +43,6 @@ from pyspark.errors import AnalysisException
 from pyspark.sql import Column, DataFrame, SparkSession
 from pyspark.sql import functions as F
 
-from cnpj_lakehouse.bronze import PARTITION_COLUMN
 from cnpj_lakehouse.download import parse_competencia
 from cnpj_lakehouse.schemas import TABLES, get_table
 from cnpj_lakehouse.silver import CNPJ_VALID_COLUMN, SILVER_LAYER
@@ -404,9 +403,11 @@ def write_report(report: QualityReport, out: Path) -> tuple[Path, Path]:
     return json_path, md_path
 
 
-def _read_month(spark: SparkSession, path: str, competencia: str, fmt: str) -> DataFrame | None:
+def _read_table(spark: SparkSession, path: str, fmt: str) -> DataFrame | None:
+    """The whole silver table: since ADR 011 it holds the current state of every key, and
+    ``competencia`` is the month of the key's last change, not a filter for the run."""
     try:
-        df = spark.read.format(fmt).load(path).where(F.col(PARTITION_COLUMN) == competencia)
+        df = spark.read.format(fmt).load(path)
     except AnalysisException:
         return None
     return df if df.limit(1).count() else None
@@ -419,17 +420,17 @@ def run(
     tables: Iterable[str] | None = None,
     fmt: str = "delta",
 ) -> QualityReport:
-    """Checks the requested silver tables (default: every table with rows that month).
+    """Checks the requested silver tables (default: every table with rows) after the run of
+    ``competencia``, which labels the report.
 
-    Lookup tables of the month are read for the ``reference`` rules even when not requested. A
-    table requested explicitly must have rows, otherwise `ValueError`.
+    Each table is checked whole, as the current state (ADR 011). Lookup tables are read for the
+    ``reference`` rules even when not requested. A table requested explicitly must have rows,
+    otherwise `ValueError`.
     """
     competencia = parse_competencia(competencia)
     root = silver_root.rstrip("/")
     available = {
-        name: df
-        for name in TABLES
-        if (df := _read_month(spark, f"{root}/{name}", competencia, fmt)) is not None
+        name: df for name in TABLES if (df := _read_table(spark, f"{root}/{name}", fmt)) is not None
     }
     if tables is None:
         names = list(available)
@@ -438,11 +439,10 @@ def run(
         absent = [n for n in names if n not in available]
         if absent:
             raise ValueError(
-                f"no silver rows for {competencia} in table(s) {', '.join(absent)};"
-                " run `make silver` first"
+                f"no silver rows in table(s) {', '.join(absent)};" " run `make silver` first"
             )
     if not names:
-        raise ValueError(f"no silver table has rows for {competencia}; run `make silver` first")
+        raise ValueError("no silver table has rows; run `make silver` first")
     log.info("quality %s: %d table(s) %s", competencia, len(names), names)
     return check_tables({n: available[n] for n in names}, competencia, available)
 
