@@ -177,7 +177,7 @@ The CI `bronze` job then runs `make silver` on the same 2026-09 subset and `scri
 
 `make quality` runs `python -m cnpj_lakehouse.quality` on the month's silver tables: declarative rules per table check mandatory columns (nulls), coded columns against the documented domains (UF, registration status, company size...) and the silver lookup tables, identifier formats and business-key uniqueness. It writes `build/quality-<COMPETENCIA>/quality.md` and `quality.json` (counts only) and exits non-zero when any `error` rule fails; `warn` rules (e.g. invalid CNPJs, codes missing from a lookup) are reported only. The CI `bronze` job runs it last and appends the report to the job summary. The rules are listed in the [data dictionary](docs/data-dictionary.md#quality-rules).
 
-For development: `make install` (dependencies + pre-commit hooks), `make lint` and `make test`. Limited memory? Set `SPARK_SAMPLE_FRACTION=0.1` in `.env` to process 10% of the data (RNF-03).
+For development: `make install` (dependencies + pre-commit hooks), `make lint` and `make test` (fails below 80% coverage, RF-09). On Windows without `HADOOP_HOME`/winutils the Spark write tests are skipped, so coverage can fall below the threshold: run `pytest` (no threshold) or `make test COVERAGE_MIN=0` locally and rely on CI (Linux) for the enforced run. Limited memory? Set `SPARK_SAMPLE_FRACTION=0.1` in `.env` to process 10% of the data (RNF-03).
 
 ## Repository layout
 

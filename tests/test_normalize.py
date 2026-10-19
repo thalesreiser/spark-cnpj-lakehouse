@@ -18,20 +18,6 @@ from cnpj_lakehouse import normalize as N
 from cnpj_lakehouse.schemas import EMPRESAS, ESTABELECIMENTOS
 
 
-@pytest.fixture(scope="module")
-def spark() -> Iterator[SparkSession]:
-    session = (
-        SparkSession.builder.master("local[1]")
-        .appName("test-normalize")
-        .config("spark.ui.enabled", "false")
-        .config("spark.sql.shuffle.partitions", "1")
-        .config("spark.sql.session.timeZone", "UTC")
-        .getOrCreate()
-    )
-    yield session
-    session.stop()
-
-
 @pytest.fixture(params=["false", "true"], ids=["ansi-off", "ansi-on"])
 def ansi(spark: SparkSession, request: pytest.FixtureRequest) -> Iterator[SparkSession]:
     """Runs a test with ``spark.sql.ansi.enabled`` off and on: the functions must never raise."""
@@ -291,14 +277,18 @@ def test_parse_date(ansi: SparkSession) -> None:
 
 def test_parse_date_is_safe_with_the_legacy_parser_policy(spark: SparkSession) -> None:
     """`to_date` raises SparkUpgradeException on ``2025011`` with the default policy; ours not."""
-    for policy in ("EXCEPTION", "CORRECTED", "LEGACY"):
-        spark.conf.set("spark.sql.legacy.timeParserPolicy", policy)
-        assert _apply(spark, N.parse_date, ["2025011", "20251340", "20250115"]) == [
-            None,
-            None,
-            date(2025, 1, 15),
-        ]
-    spark.conf.set("spark.sql.legacy.timeParserPolicy", "EXCEPTION")
+    key = "spark.sql.legacy.timeParserPolicy"
+    previous = spark.conf.get(key)
+    try:
+        for policy in ("EXCEPTION", "CORRECTED", "LEGACY"):
+            spark.conf.set(key, policy)
+            assert _apply(spark, N.parse_date, ["2025011", "20251340", "20250115"]) == [
+                None,
+                None,
+                date(2025, 1, 15),
+            ]
+    finally:  # the session is shared by the whole run
+        spark.conf.set(key, previous or "EXCEPTION")
 
 
 def test_parse_decimal(ansi: SparkSession) -> None:

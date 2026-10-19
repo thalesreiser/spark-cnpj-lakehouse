@@ -6,7 +6,6 @@ synthetic CSV with a local SparkSession, using the same options as the real rele
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -277,19 +276,6 @@ EMPRESAS_ROWS = [
     '"00000001";"NIGHT CLUB ""TUTU"" LTDA";"2062";"49";"0,00";"01";""',
     '"00000002";"CAFÉ; AÇÚCAR & CIA";"1031";"49";"1000,50";"03";"SÃO PAULO - SP"',
 ]
-
-
-@pytest.fixture(scope="module")
-def spark() -> Iterator[SparkSession]:
-    session = (
-        SparkSession.builder.master("local[1]")
-        .appName("test-schemas")
-        .config("spark.ui.enabled", "false")
-        .config("spark.sql.shuffle.partitions", "1")
-        .getOrCreate()
-    )
-    yield session
-    session.stop()
 
 
 def _write_latin1(path: Path, rows: list[str]) -> Path:
