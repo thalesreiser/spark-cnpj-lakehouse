@@ -186,6 +186,25 @@ Simples Nacional and MEI tax regime options, one row per CNPJ root.
 | 6 | `data_opcao_mei` | date | yes | Date of the MEI option |
 | 7 | `data_exclusao_mei` | date | yes | Date of the exclusion from MEI |
 
+## Quality rules
+
+`cnpj_lakehouse/quality.py` (`make quality`, RF-03; tests in `tests/test_quality.py`) checks the silver tables (the whole current state, ADR 011) after the run of a month with declarative rules and writes `build/quality-<competencia>/quality.md` and `quality.json` (rows checked and failures per rule, never data). An `error` failure blocks the pipeline (exit code 1); a `warn` failure is reported only. Null values are counted only by `not_null` rules; the other row rules ignore them.
+
+| Rule | Tables and columns | Valid values (source) | Severity |
+|---|---|---|---|
+| `not_null` | business key columns (nullable = no above): `cnpj_basico`, `cnpj_ordem`, `cnpj_dv`, `codigo` | - | error |
+| `not_null` | `empresas.razao_social`, `natureza_juridica`; `estabelecimentos.identificador_matriz_filial`, `situacao_cadastral`, `uf`, `municipio`, `cnae_fiscal_principal`; `socios.identificador_socio`, `nome_socio_razao_social`; lookups `descricao` | - | warn |
+| `unique` | the silver business key of every table (see "Silver keys" above) | - | error |
+| `pattern` | `cnpj_basico` (`^[0-9A-Z]{8}$`), `cnpj_ordem` (`^[0-9A-Z]{4}$`), `cnpj_dv` (`^[0-9]{2}$`) | layout + alphanumeric CNPJ (ADR 009) | error |
+| `pattern` | `estabelecimentos.cep` (`^[0-9]{8}$`) | layout | warn |
+| `domain` | `estabelecimentos.uf` | 26 states + `DF` + `EX` (abroad) | error |
+| `domain` | `estabelecimentos.situacao_cadastral` (`01`, `02`, `03`, `04`, `08`), `identificador_matriz_filial` (`1`, `2`); `empresas.porte_empresa` (`00`, `01`, `03`, `05`); `socios.identificador_socio` (`1`, `2`, `3`) | this dictionary (official layout) | error |
+| `domain` | `socios.faixa_etaria` (`0`-`9`); `simples.opcao_pelo_simples`, `opcao_mei` (`S`, `N`) | this dictionary | warn |
+| `reference` | `empresas.natureza_juridica` -> `naturezas`, `qualificacao_responsavel` -> `qualificacoes`; `estabelecimentos.municipio` -> `municipios`, `cnae_fiscal_principal` -> `cnaes`, `motivo_situacao_cadastral` -> `motivos`, `pais` -> `paises`; `socios.qualificacao_socio`, `qualificacao_representante_legal` -> `qualificacoes`, `pais` -> `paises` | silver lookup table of the same month (`codigo`); skipped when it has no rows | warn |
+| `is_true` | `estabelecimentos.cnpj_valido` | ADR 010: invalid CNPJs are kept flagged, so a metric, not a blocker | warn |
+
+Closed code lists come from this dictionary; open code lists (municipalities, CNAEs, legal natures, qualifications, countries, reasons) come from the lookup tables, which the Receita Federal updates with each release.
+
 ### Lookup tables (2 columns each)
 
 All six share the same layout: `codigo` (string, not nullable: the code, with leading zeros) and `descricao` (string: its name).
