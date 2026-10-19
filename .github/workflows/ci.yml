@@ -85,7 +85,8 @@ jobs:
       # the same bronze (no download) updates the changed keys and inserts the new ones.
       - name: make silver again (RF-04, same month -> 0 inserted, 0 updated)
         run: |
-          cp "build/silver-${COMPETENCIA}.json" "build/silver-${COMPETENCIA}-first.json"
+          # build/ is written by the containers (root)
+          sudo cp "build/silver-${COMPETENCIA}.json" "build/silver-${COMPETENCIA}-first.json"
           make silver COMPETENCIA="$COMPETENCIA"
           jq -e '[.tables[] | select(.operation != "merge" or .rows_inserted != 0
             or .rows_updated != 0)] | length == 0' "build/silver-${COMPETENCIA}.json"
@@ -97,7 +98,7 @@ jobs:
       - name: make silver next month (RF-04, updated and inserted as expected, no duplicates)
         run: |
           make silver COMPETENCIA=2026-10 TABLES=empresas
-          make silver-check COMPETENCIA=2026-10 && cp -r build/silver-check build/silver-check-2026-10
+          make silver-check COMPETENCIA=2026-10 && sudo cp -r build/silver-check build/silver-check-2026-10
           jq -e --slurpfile e build/next-month.json \
             --slurpfile f "build/silver-${COMPETENCIA}-first.json" '
             .tables[0] as $t | ($f[0].tables[] | select(.table == "empresas")) as $p
