@@ -16,7 +16,6 @@ from __future__ import annotations
 import json
 import os
 import sys
-from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -45,20 +44,6 @@ FIXTURE_RAW = Path(__file__).parent / "fixtures" / "release"
 COMPETENCIA = "2026-09"
 # Lines per table in the fixture (the test also counts them from the files).
 EXPECTED_LINES = {"empresas": 10, "simples": 5, "cnaes": 4}
-
-
-@pytest.fixture(scope="module")
-def spark() -> Iterator[SparkSession]:
-    session = (
-        SparkSession.builder.master("local[1]")
-        .appName("test-bronze-counts")
-        .config("spark.ui.enabled", "false")
-        .config("spark.sql.shuffle.partitions", "1")
-        .config("spark.sql.session.timeZone", "UTC")
-        .getOrCreate()
-    )
-    yield session
-    session.stop()
 
 
 def _source_files() -> dict[str, list[Path]]:
