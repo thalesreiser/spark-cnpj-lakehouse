@@ -174,6 +174,8 @@ make silver-check COMPETENCIA=2026-09                   # no duplicated business
 
 The CI `bronze` job then runs `make silver` on the same 2026-09 subset and `scripts/silver_check.py`, which fails if any business key appears twice, if a date column is not typed `date` or if a valid source date was lost. It then re-runs the month (expects 0 inserted, 0 updated) and loads a synthetic next month derived from the same bronze (`scripts/silver_next_month.py`), expecting the changed keys to be updated, the new ones inserted and no key duplicated.
 
+**Idempotency guarantee (RF-04).** Re-running `make silver` for a month that is already loaded leaves every silver table identical: the MERGE inserts and updates nothing, and the table fingerprint (`cnpj_lakehouse.fingerprint.table_fingerprint`: row count plus an order-independent SHA-256 of every column except the load metadata `_ingest_ts`/`_source_file`) is the same before and after. A new month changes only the keys it updates or inserts, re-running it is again a no-op, and loading an older month never overwrites a newer record. This is proven by `tests/test_silver_idempotency.py` and on real data by the CI `bronze` job, which prints both fingerprints of the re-run in its job summary.
+
 For development: `make install` (dependencies + pre-commit hooks), `make lint` and `make test` (fails below 80% coverage, RF-09). On Windows without `HADOOP_HOME`/winutils the Spark write tests are skipped, so coverage can fall below the threshold: run `pytest` (no threshold) or `make test COVERAGE_MIN=0` locally and rely on CI (Linux) for the enforced run. Limited memory? Set `SPARK_SAMPLE_FRACTION=0.1` in `.env` to process 10% of the data (RNF-03).
 
 ## Repository layout
