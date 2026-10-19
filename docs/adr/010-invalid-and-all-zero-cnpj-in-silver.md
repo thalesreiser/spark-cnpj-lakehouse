@@ -1,6 +1,6 @@
 # 010 - Silver keeps establishments with an invalid CNPJ flagged; the all-zero CNPJ is invalid
 
-- **Status:** proposed
+- **Status:** accepted (2026-10-19, by Thales Reiser Pedreira)
 - **Date:** 2026-10-17
 
 ## Context
