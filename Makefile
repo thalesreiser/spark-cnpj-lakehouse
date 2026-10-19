@@ -53,7 +53,8 @@ silver-check:  ## RF-03 proof: no duplicated business key, date columns typed, c
 	$(SPARK_RUN) python scripts/silver_check.py --competencia $(COMPETENCIA) 		--summary build/silver-$(COMPETENCIA).json --out build/silver-check
 
 quality:  ## RF-03: quality checks of silver (nulls, domains, uniqueness); fails on `error` rules
-	$(SPARK_RUN) python -m cnpj_lakehouse.quality --competencia $(COMPETENCIA) \n		$(if $(strip $(TABLES)),--tables $(TABLES),) --report build/quality-$(COMPETENCIA)
+	$(SPARK_RUN) python -m cnpj_lakehouse.quality --competencia $(COMPETENCIA) \
+		$(if $(strip $(TABLES)),--tables $(TABLES),) --report build/quality-$(COMPETENCIA)
 
 run:
 	python -m cnpj_lakehouse.pipeline --competencia $(COMPETENCIA)
