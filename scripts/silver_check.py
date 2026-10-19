@@ -1,11 +1,13 @@
-"""RF-03 proof on CI: the silver Delta tables of a month have no duplicated business key.
+"""RF-03 / RF-04 proof on CI: the silver Delta tables have no duplicated business key.
 
 Run inside the `spark-client` container after `make silver`. For each table of the run summary
-(``build/silver-<competencia>.json``) it reads ``s3a://<bucket>/silver/<table>`` and checks that:
+(``build/silver-<competencia>.json``) it reads ``s3a://<bucket>/silver/<table>`` (the current
+state of every key across months, ADR 011) and checks that:
 
-* the month's partition has as many rows as the summary reports (``rows_out``) and the bronze
-  partition as many as ``rows_in``, and ``rows_in = rows_out + duplicates_removed +
-  rows_without_key + invalid_cnpj_dropped``;
+* the table has as many rows as the summary reports (``table_rows``), the bronze partition of
+  the month as many as ``rows_in``, ``rows_in = rows_out + duplicates_removed +
+  rows_without_key + invalid_cnpj_dropped`` and ``rows_out = rows_inserted + rows_updated +
+  rows_unchanged`` (the MERGE metrics);
 * **no business key appears more than once** (`cnpj_lakehouse.silver.duplicate_keys`);
 * every date column is typed ``date``, and every non-empty source date that did not become a
   date is really invalid: the distinct failing values are re-checked with Python's
@@ -62,7 +64,7 @@ def main() -> int:
         for report in run_summary["tables"]:
             table = report["table"]
             month = F.col(PARTITION_COLUMN) == args.competencia
-            silver = spark.read.format("delta").load(cfg.path(SILVER_LAYER, table)).where(month)
+            silver = spark.read.format("delta").load(cfg.path(SILVER_LAYER, table))
             bronze = spark.read.format("delta").load(cfg.path(BRONZE_LAYER, table)).where(month)
             dates: dict[str, Any] = {}
             for name in date_columns(table):
@@ -88,6 +90,12 @@ def main() -> int:
                 "rows_in": report["rows_in"],
                 "rows_out": report["rows_out"],
                 "duplicates_removed": report["duplicates_removed"],
+                "operation": report["operation"],
+                "table_version": report["table_version"],
+                "rows_inserted": report["rows_inserted"],
+                "rows_updated": report["rows_updated"],
+                "rows_unchanged": report["rows_unchanged"],
+                "table_rows": report["table_rows"],
                 "rows_without_key": report["rows_without_key"],
                 "invalid_cnpj": report["invalid_cnpj"],
                 "invalid_cnpj_dropped": report["invalid_cnpj_dropped"],
@@ -96,7 +104,10 @@ def main() -> int:
             }
             result["ok"] = (
                 result["duplicate_keys"] == 0
-                and result["silver_rows"] == report["rows_out"] > 0
+                and result["silver_rows"] == report["table_rows"] > 0
+                and report["rows_out"] > 0
+                and report["rows_out"]
+                == report["rows_inserted"] + report["rows_updated"] + report["rows_unchanged"]
                 and result["bronze_rows"] == report["rows_in"]
                 and report["rows_in"]
                 == report["rows_out"]
@@ -118,8 +129,9 @@ def main() -> int:
         f"### Silver checks - competencia {args.competencia}",
         "",
         "| Table | Business key | Rows in | Rows out | Duplicates removed | Without key"
-        " | Invalid CNPJ | Duplicate keys | Date columns (failures) | OK |",
-        "|---|---|---:|---:|---:|---:|---:|---:|---|---|",
+        " | Invalid CNPJ | Inserted | Updated | Unchanged | Table rows | Duplicate keys"
+        " | Date columns (failures) | OK |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
     ]
     for r in results:
         dates_text = (
@@ -128,7 +140,9 @@ def main() -> int:
         lines.append(
             f"| {r['table']} | {' + '.join(r['key'])} | {r['rows_in']:,} | {r['rows_out']:,}"
             f" | {r['duplicates_removed']:,} | {r['rows_without_key']:,} | {r['invalid_cnpj']:,}"
-            f" | {r['duplicate_keys']:,} | {dates_text} | {'yes' if r['ok'] else 'NO'} |"
+            f" | {r['rows_inserted']:,} | {r['rows_updated']:,} | {r['rows_unchanged']:,}"
+            f" | {r['table_rows']:,} | {r['duplicate_keys']:,} | {dates_text}"
+            f" | {'yes' if r['ok'] else 'NO'} |"
         )
     (args.out / "silver-check.md").write_text("\n".join(lines) + "\n")
     print("[silver-check] OK" if ok else "[silver-check] FAILED")

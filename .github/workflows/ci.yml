@@ -81,6 +81,31 @@ jobs:
         run: make silver COMPETENCIA="$COMPETENCIA"
       - name: make silver-check (no duplicated business key, dates typed, counts reconciled)
         run: make silver-check COMPETENCIA="$COMPETENCIA"
+      # RF-04 / ADR 011: re-running the month merges nothing; a synthetic next month derived from
+      # the same bronze (no download) updates the changed keys and inserts the new ones.
+      - name: make silver again (RF-04, same month -> 0 inserted, 0 updated)
+        run: |
+          # build/ is written by the containers (root)
+          sudo cp "build/silver-${COMPETENCIA}.json" "build/silver-${COMPETENCIA}-first.json"
+          make silver COMPETENCIA="$COMPETENCIA"
+          jq -e '[.tables[] | select(.operation != "merge" or .rows_inserted != 0
+            or .rows_updated != 0)] | length == 0' "build/silver-${COMPETENCIA}.json"
+      - name: Synthetic next month in bronze (RF-04, derived from the same month)
+        run: >-
+          docker compose -f infra/docker-compose.yml --profile client run --rm spark-client
+          python scripts/silver_next_month.py --source "$COMPETENCIA" --target 2026-10
+          --table empresas --column razao_social --out build/next-month.json
+      - name: make silver next month (RF-04, updated and inserted as expected, no duplicates)
+        run: |
+          make silver COMPETENCIA=2026-10 TABLES=empresas
+          make silver-check COMPETENCIA=2026-10 && sudo cp -r build/silver-check build/silver-check-2026-10
+          jq -e --slurpfile e build/next-month.json \
+            --slurpfile f "build/silver-${COMPETENCIA}-first.json" '
+            .tables[0] as $t | ($f[0].tables[] | select(.table == "empresas")) as $p
+            | $t.rows_updated == $e[0].expected_updated and $t.rows_updated > 0
+            and $t.rows_inserted == $e[0].expected_inserted and $t.rows_inserted > 0
+            and $t.table_rows == $p.table_rows + $t.rows_inserted' build/silver-2026-10.json
+          cat build/silver-check-2026-10/silver-check.md >> "$GITHUB_STEP_SUMMARY"
       - name: Summary
         if: always()
         run: |
@@ -96,8 +121,9 @@ jobs:
           path: |
             build/bronze-${{ env.COMPETENCIA }}.json
             build/bronze-check/
-            build/silver-${{ env.COMPETENCIA }}.json
-            build/silver-check/
+            build/silver-*.json
+            build/next-month.json
+            build/silver-check*/
           retention-days: 30
           if-no-files-found: warn
       - name: Service logs

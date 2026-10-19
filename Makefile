@@ -62,10 +62,12 @@ fmt:
 	ruff check --fix src tests scripts infra && black src tests scripts infra
 
 # RF-09: the suite fails below 80% line coverage, both for the whole package and for the
-# transformation modules alone (CI runs `make test` on Linux, where no test is skipped).
+# transformation modules alone (CI runs `make test` on Linux, where no test is skipped). The Delta
+# tests need a fresh JVM, so they run in a second pytest whose coverage is appended (--cov-append).
 COVERAGE_MIN ?= 80
 TRANSFORMS = */cnpj_lakehouse/normalize.py,*/cnpj_lakehouse/bronze.py,*/cnpj_lakehouse/silver.py,*/cnpj_lakehouse/schemas.py
 
 test:
-	pytest -m "not integration" --cov-fail-under=$(COVERAGE_MIN)
+	pytest -m "not integration and not delta" --cov-fail-under=$(COVERAGE_MIN)
+	pytest -m "delta and not integration" --cov-append
 	coverage report --include="$(TRANSFORMS)" --fail-under=$(COVERAGE_MIN)

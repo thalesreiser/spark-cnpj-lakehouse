@@ -1,7 +1,7 @@
-"""RF-03 / RN-01: typed, deduplicated silver layer (Delta), one current record per business key.
+"""RF-03 / RF-04 / RN-01: typed, deduplicated silver layer (Delta), current state per business key.
 
-One run builds the silver tables of one reference month (``competencia``) from the bronze
-tables written by RF-02. For each table:
+One run loads one reference month (``competencia``) of the bronze tables written by RF-02 into
+the silver tables. For each table:
 
 1. the month's partition of ``s3a://<bucket>/bronze/<table>/`` is read;
 2. the documented target types are applied (`cnpj_lakehouse.normalize.apply_silver_types`,
@@ -12,14 +12,20 @@ tables written by RF-02. For each table:
    discarded, according to `INVALID_CNPJ_POLICY` (ADR 010);
 4. **deduplication**: within each business key (`SilverRule.key`) a window function keeps the
    *current record*, the first row of an explicit, deterministic ordering (`SilverRule.order`,
-   always ending with ``competencia``, ``_ingest_ts``, ``_source_file`` and a hash of the whole
-   row, so ties never depend on the physical order of the rows);
-5. the rows are written to ``s3a://<bucket>/silver/<table>/`` partitioned by ``competencia``;
-   re-running a month replaces its partition (Delta ``replaceWhere``);
+   always ending with ``competencia``, ``_ingest_ts``, ``_source_file`` and ``_row_hash``, so
+   ties never depend on the physical order of the rows);
+5. **incremental load (RF-04, ADR 011)**: the month's current records are merged into
+   ``s3a://<bucket>/silver/<table>/``, which holds the *current state* of every business key
+   across months (not partitioned): a new key is inserted, a known key is updated only when
+   its ``_row_hash`` (SHA-256 of the business columns, stored in the table) changed and the
+   month is not older than the stored one, and keys absent from the month are kept. The first
+   run creates the table. Re-running a month changes nothing (0 inserted, 0 updated);
 6. quality counts (rows in and out, duplicates removed, rows without key, invalid and all-zero
-   CNPJs, dates that failed to parse) are logged and returned in a `SilverReport`.
+   CNPJs, dates that failed to parse) and the Delta operation metrics (rows inserted, updated,
+   unchanged, table version) are logged and returned in a `SilverReport`.
 
-Steps 2-4 are pure DataFrame functions (RNF-04); `build_table` and `main` orchestrate them.
+Steps 2-4 and the MERGE conditions are pure functions (RNF-04); `merge_silver`, `build_table`
+and `main` do the I/O.
 
 Usage (inside the ``spark-client`` container, see ``make silver``)::
 
@@ -40,6 +46,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
+from delta.tables import DeltaTable
 from pyspark.errors import AnalysisException
 from pyspark.sql import Column, DataFrame, SparkSession, Window
 from pyspark.sql import functions as F
@@ -57,9 +64,13 @@ SILVER_LAYER = "silver"
 # Columns added to `estabelecimentos` (RN-01 key and its quality flag).
 CNPJ_COLUMN = "cnpj"
 CNPJ_VALID_COLUMN = "cnpj_valido"
+# SHA-256 of the business columns, stored in silver: change detection of the MERGE (ADR 011).
+ROW_HASH = "_row_hash"
+_ROW_HASH = ROW_HASH
+# Bronze metadata: written to silver but not part of the business content (not hashed).
+METADATA_COLUMNS = (PARTITION_COLUMN, INGEST_TS, SOURCE_FILE)
 # Internal helper columns, never written to silver.
 _RAW_PREFIX = "_raw_"
-_ROW_HASH = "_row_hash"
 _ROW_NUMBER = "_row_number"
 _KEY_MISSING = "_key_missing"
 _CNPJ_INVALID = "_cnpj_invalid"
@@ -192,7 +203,7 @@ class SilverReport:
     path: str
     key: tuple[str, ...]
     rows_in: int
-    rows_out: int
+    rows_out: int  # current records of the month (the MERGE source)
     duplicates_removed: int
     rows_without_key: int
     invalid_cnpj: int
@@ -201,6 +212,27 @@ class SilverReport:
     invalid_cnpj_dropped: int
     date_values: dict[str, int]
     date_parse_failures: dict[str, int]
+    operation: str  # "create" (first run) or "merge"
+    table_version: int  # Delta version written (or the current one when nothing changed)
+    rows_inserted: int
+    rows_updated: int
+    rows_unchanged: int
+    table_rows: int  # rows of the silver table after the run (every month)
+
+
+@dataclass(frozen=True)
+class WriteMetrics:
+    """What one silver write did to the Delta table (from its commit's operation metrics)."""
+
+    operation: str
+    version: int
+    source_rows: int
+    inserted: int
+    updated: int
+
+    @property
+    def unchanged(self) -> int:
+        return self.source_rows - self.inserted - self.updated
 
 
 # --------------------------------------------------------------------------------------------
@@ -317,18 +349,28 @@ def select_rows(flagged: DataFrame, options: SilverOptions = DEFAULT_OPTIONS) ->
 
 
 def row_hash(columns: Sequence[str]) -> Column:
-    """SHA-256 of the row's values (JSON of a struct, nulls included): the last tie-breaker."""
+    """SHA-256 of the given values (JSON of a struct, nulls included)."""
     return F.sha2(F.to_json(F.struct(*columns), {"ignoreNullFields": "false"}), 256)
+
+
+def content_columns(df: DataFrame) -> list[str]:
+    """Business columns hashed into ``_row_hash``: silver columns minus the bronze metadata.
+
+    ``competencia``, ``_ingest_ts`` and ``_source_file`` are left out, so the same record
+    loaded from another month or ingestion has the same hash (change detection, ADR 011).
+    """
+    excluded = {*METADATA_COLUMNS, _ROW_HASH}
+    return [c for c in silver_columns(df) if c not in excluded]
 
 
 def deduplicate(df: DataFrame, rule: SilverRule) -> DataFrame:
     """Keeps the current record of each business key: the first row of `rule.ordering()`.
 
     ``row_number`` over ``partitionBy(key)`` (nulls in optional key columns form one group).
-    Helper columns are kept for the caller to drop (`silver_columns`).
+    ``_row_hash`` (the business content) is added and is the last tie-breaker: rows that still
+    tie have the same content. Helper columns are kept for the caller to drop (`silver_columns`).
     """
-    payload = silver_columns(df)
-    with_hash = df.withColumn(_ROW_HASH, row_hash(payload))
+    with_hash = df.withColumn(_ROW_HASH, row_hash(content_columns(df)))
     window = Window.partitionBy(*rule.key).orderBy(*(o.expression() for o in rule.ordering()))
     return (
         with_hash.withColumn(_ROW_NUMBER, F.row_number().over(window))
@@ -338,9 +380,9 @@ def deduplicate(df: DataFrame, rule: SilverRule) -> DataFrame:
 
 
 def silver_columns(df: DataFrame) -> list[str]:
-    """Output columns: source columns, ``cnpj``/``cnpj_valido`` when present, bronze metadata."""
+    """Output columns: source columns, ``cnpj``/``cnpj_valido`` when present, bronze metadata
+    and ``_row_hash`` when present."""
     helpers = {
-        _ROW_HASH,
         _ROW_NUMBER,
         _KEY_MISSING,
         _CNPJ_INVALID,
@@ -364,6 +406,45 @@ def duplicate_keys(df: DataFrame, table: str) -> int:
     return df.groupBy(*get_rule(table).key).count().where(F.col("count") > 1).count()
 
 
+TARGET = "t"
+SOURCE = "s"
+
+
+def merge_condition(key: Sequence[str]) -> str:
+    """MERGE join on the business key, null-safe (``<=>``) like the deduplication groups."""
+    return " AND ".join(f"{TARGET}.`{k}` <=> {SOURCE}.`{k}`" for k in key)
+
+
+def change_condition() -> str:
+    """When a matched key is updated: its content changed and the month is not older.
+
+    A re-run of the same month is a no-op (same hash); re-running an older month never
+    overwrites a newer current record.
+    """
+    return (
+        f"NOT ({TARGET}.`{_ROW_HASH}` <=> {SOURCE}.`{_ROW_HASH}`)"
+        f" AND {SOURCE}.`{PARTITION_COLUMN}` >= {TARGET}.`{PARTITION_COLUMN}`"
+    )
+
+
+def write_metrics(version: int, operation: str, metrics: Mapping[str, str]) -> WriteMetrics:
+    """`WriteMetrics` from a Delta commit (``DeltaTable.history``): ``WRITE`` or ``MERGE``."""
+
+    def get(name: str) -> int:
+        return int(metrics.get(name) or 0)
+
+    if operation == "MERGE":
+        return WriteMetrics(
+            "merge",
+            version,
+            get("numSourceRows"),
+            get("numTargetRowsInserted"),
+            get("numTargetRowsUpdated"),
+        )
+    rows = get("numOutputRows")
+    return WriteMetrics("create", version, rows, rows, 0)
+
+
 # --------------------------------------------------------------------------------------------
 # Orchestration
 # --------------------------------------------------------------------------------------------
@@ -373,14 +454,38 @@ def read_month(spark: SparkSession, path: str, competencia: str, fmt: str = "del
     return spark.read.format(fmt).load(path).where(F.col(PARTITION_COLUMN) == competencia)
 
 
-def write_silver(df: DataFrame, path: str, competencia: str, fmt: str = "delta") -> None:
-    """Writes the month's partition, replacing it on re-runs (same rule as bronze)."""
-    writer = df.write.format(fmt).mode("overwrite").partitionBy(PARTITION_COLUMN)
-    if fmt == "delta":
-        writer = writer.option("replaceWhere", f"{PARTITION_COLUMN} = '{competencia}'")
-    else:
-        writer = writer.option("partitionOverwriteMode", "dynamic")
-    writer.save(path)
+def _last_commit(table: DeltaTable) -> tuple[int, str, dict[str, str]]:
+    row = table.history(1).select("version", "operation", "operationMetrics").first()
+    assert row is not None
+    return int(row["version"]), str(row["operation"]), dict(row["operationMetrics"] or {})
+
+
+def merge_silver(
+    spark: SparkSession, batch: DataFrame, path: str, key: Sequence[str]
+) -> WriteMetrics:
+    """Loads one month's current records into the silver Delta table (RF-04, ADR 011).
+
+    First run: the table is created (version 0 = that month). Later runs: one ``MERGE`` by
+    business key, ``whenMatchedUpdateAll`` under `change_condition` and
+    ``whenNotMatchedInsertAll``; keys absent from the month are kept. If Delta skips the
+    commit (nothing to write), the metrics are 0 inserted, 0 updated and the batch is counted.
+    """
+    if not DeltaTable.isDeltaTable(spark, path):
+        batch.write.format("delta").mode("errorifexists").save(path)
+        return write_metrics(*_last_commit(DeltaTable.forPath(spark, path)))
+    target = DeltaTable.forPath(spark, path)
+    before = _last_commit(target)[0]
+    (
+        target.alias(TARGET)
+        .merge(batch.alias(SOURCE), merge_condition(key))
+        .whenMatchedUpdateAll(condition=change_condition())
+        .whenNotMatchedInsertAll()
+        .execute()
+    )
+    version, operation, metrics = _last_commit(DeltaTable.forPath(spark, path))
+    if version == before:  # empty commit skipped by Delta
+        return WriteMetrics("merge", version, batch.count(), 0, 0)
+    return write_metrics(version, operation, metrics)
 
 
 def build_table(
@@ -392,12 +497,14 @@ def build_table(
     options: SilverOptions = DEFAULT_OPTIONS,
     fmt: str = "delta",
 ) -> SilverReport:
-    """Reads the month from bronze, builds and writes silver, and returns the counts."""
+    """Reads the month from bronze (format `fmt`), merges it into the silver Delta table and
+    returns the counts."""
     rule = get_rule(table)
     bronze = read_month(spark, bronze_path, competencia, fmt)
     counts = quality_counts(type_and_flag(bronze, table, options), table, options)
-    write_silver(build_silver(bronze, table, options), output_path, competencia, fmt)
-    rows_out = read_month(spark, output_path, competencia, fmt).count()
+    written = merge_silver(spark, build_silver(bronze, table, options), output_path, rule.key)
+    rows_out = written.source_rows
+    table_rows = spark.read.format("delta").load(output_path).count()
     report = SilverReport(
         table=table,
         competencia=competencia,
@@ -413,10 +520,17 @@ def build_table(
         invalid_cnpj_dropped=counts.invalid_cnpj_dropped,
         date_values=counts.date_values,
         date_parse_failures=counts.date_parse_failures,
+        operation=written.operation,
+        table_version=written.version,
+        rows_inserted=written.inserted,
+        rows_updated=written.updated,
+        rows_unchanged=written.unchanged,
+        table_rows=table_rows,
     )
     log.info(
         "%s: rows in %d, out %d, duplicates removed %d, without key %d, invalid CNPJ %d"
-        " (all-zero %d, policy %s, dropped %d), date parse failures %s",
+        " (all-zero %d, policy %s, dropped %d), date parse failures %s; %s v%d: inserted %d,"
+        " updated %d, unchanged %d, table rows %d",
         table,
         report.rows_in,
         report.rows_out,
@@ -427,6 +541,12 @@ def build_table(
         report.invalid_cnpj_policy,
         report.invalid_cnpj_dropped,
         report.date_parse_failures,
+        report.operation,
+        report.table_version,
+        report.rows_inserted,
+        report.rows_updated,
+        report.rows_unchanged,
+        report.table_rows,
     )
     return report
 
@@ -447,7 +567,8 @@ def run(
     options: SilverOptions = DEFAULT_OPTIONS,
     fmt: str = "delta",
 ) -> list[SilverReport]:
-    """Builds silver for the requested tables (default: every table with bronze rows that month).
+    """Loads one month into silver for the requested tables (default: every table with bronze
+    rows that month). `fmt` is the bronze format; silver is always Delta (MERGE, ADR 011).
 
     A table requested explicitly must have bronze rows for the month, otherwise `ValueError`.
     """
@@ -497,7 +618,9 @@ def summary(
 def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="python -m cnpj_lakehouse.silver",
-        description="RF-03: build the typed, deduplicated silver layer of one reference month.",
+        description=(
+            "RF-03/RF-04: merge one reference month into the typed, deduplicated silver layer."
+        ),
     )
     parser.add_argument(
         "--competencia", required=True, type=_competencia_arg, help="reference month, YYYY-MM"
@@ -510,7 +633,7 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     )
     parser.add_argument("--bronze", default=None, help="default: s3a://<LAKEHOUSE_BUCKET>/bronze")
     parser.add_argument("--output", default=None, help="default: s3a://<LAKEHOUSE_BUCKET>/silver")
-    parser.add_argument("--format", default="delta", help="table format (default: delta)")
+    parser.add_argument("--format", default="delta", help="bronze table format (default: delta)")
     parser.add_argument(
         "--invalid-cnpj",
         choices=[p.value for p in InvalidCnpjPolicy],
@@ -561,7 +684,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"[silver] {r.table}: in {r.rows_in}, out {r.rows_out}, duplicates removed"
             f" {r.duplicates_removed}, without key {r.rows_without_key}, invalid CNPJ"
             f" {r.invalid_cnpj} ({r.invalid_cnpj_policy}), date parse failures"
-            f" {sum(r.date_parse_failures.values())}"
+            f" {sum(r.date_parse_failures.values())}; {r.operation} v{r.table_version}: inserted"
+            f" {r.rows_inserted}, updated {r.rows_updated}, unchanged {r.rows_unchanged},"
+            f" table rows {r.table_rows}"
         )
     return 0
 
