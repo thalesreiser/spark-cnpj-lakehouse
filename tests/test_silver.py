@@ -8,7 +8,6 @@ fresh JVM: they live in ``tests/test_silver_merge.py`` (marker ``delta``, own py
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -42,20 +41,6 @@ TS1 = datetime(2026, 10, 1, 8, 0)
 TS2 = datetime(2026, 10, 2, 8, 0)
 DROP = SilverOptions(invalid_cnpj_policy=InvalidCnpjPolicy.DROP)
 ZERO_IS_VALID = SilverOptions(zero_cnpj_is_invalid=False)
-
-
-@pytest.fixture(scope="module")
-def spark() -> Iterator[SparkSession]:
-    session = (
-        SparkSession.builder.master("local[2]")
-        .appName("test-silver")
-        .config("spark.ui.enabled", "false")
-        .config("spark.sql.shuffle.partitions", "4")
-        .config("spark.sql.session.timeZone", "UTC")
-        .getOrCreate()
-    )
-    yield session
-    session.stop()
 
 
 def dv(root: str) -> str:
