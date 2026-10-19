@@ -24,7 +24,7 @@ Facts that shape the decision:
 2. **Change detection.** A `_row_hash` column (SHA-256 of the JSON of the business columns, nulls included; bronze metadata `competencia`, `_ingest_ts`, `_source_file` left out) is computed in the deduplication and **stored in the table**. The same record loaded from another month or ingestion has the same hash, so an unchanged key is not rewritten and keeps the `competencia` / `_ingest_ts` / `_source_file` of its **last change**. `_row_hash` is also the last tie-breaker of the current-record ordering (rows that still tie have the same content), so the choice does not depend on the month either.
 3. **Absent keys are kept** (no `whenNotMatchedBySource` delete). Closed companies stay in the source with a registration status, and partial runs (a subset of the files) would otherwise delete most of the table.
 4. **Partitioning.** The silver tables are **not partitioned**. A `competencia` partition would now mean "month of the last change": skewed, and a MERGE would move rows between partitions without pruning. UF partitioning and file size stay with epic 6 (ADR 002, ADR 004).
-5. **Metrics.** The Delta commit metrics (`numSourceRows`, `numTargetRowsInserted`, `numTargetRowsUpdated`; `WRITE`'s `numOutputRows` on creation) go to the run summary as `operation`, `table_version`, `rows_inserted`, `rows_updated`, `rows_unchanged` (source rows minus inserted and updated) and `table_rows`. If Delta skips an empty commit, the run reports 0 inserted and 0 updated.
+5. **Metrics.** The Delta commit metrics (`numSourceRows`, `numTargetRowsInserted`, `numTargetRowsUpdated`; `WRITE`'s `numOutputRows` on creation) go to the run summary as `operation`, `table_version`, `rows_inserted`, `rows_updated`, `rows_unchanged` (source rows minus inserted and updated) and `table_rows`. If Delta ever skips an empty commit, the run still reports 0 inserted and 0 updated.
 6. **Re-runs.** Re-running the same month changes nothing (0 inserted, 0 updated); re-running an older month never overwrites a newer record.
 
 ## Alternatives considered
@@ -38,7 +38,7 @@ Facts that shape the decision:
 
 ## Consequences
 
-- One Delta version per loaded month (plus re-runs that changed something): `VERSION AS OF` / `TIMESTAMP AS OF` give the silver state after each load (task 4.3). Version 0 is the first month loaded. `VACUUM` retention bounds how far back this goes.
+- One Delta version per run (a re-run with no change still commits an empty `MERGE` version, as seen on CI: 0 inserted, 0 updated): `VERSION AS OF` / `TIMESTAMP AS OF` give the silver state after each load (task 4.3). Version 0 is the first month loaded. `VACUUM` retention bounds how far back this goes.
 - `competencia` in silver is the month of the last change of the key, not the month of the run; a query "as of month M" uses time travel, or bronze.
 - Loading months out of order is safe for existing keys (an older month never wins); keys first seen in an older month are inserted.
 - Silver tables written with the old layout (partitioned by `competencia`, no `_row_hash`) must be dropped before the first MERGE run; CI always starts from an empty MinIO.
