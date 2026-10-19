@@ -14,6 +14,10 @@ state of every key across months, ADR 011) and checks that:
   ``datetime.strptime`` (an oracle independent of `parse_date`), so 100% of the valid source
   dates are typed.
 
+It also records the table fingerprint (`cnpj_lakehouse.fingerprint.table_fingerprint`: row count
+and an order-independent SHA-256 of the content), which CI compares before and after a re-run of
+the same month (RF-04 idempotency, task 4.2).
+
 Writes a JSON and a Markdown summary (counts only, never data) and exits non-zero on failure.
 
     python scripts/silver_check.py --competencia 2026-09 --summary build/silver-2026-09.json
@@ -33,6 +37,7 @@ from pyspark.sql import functions as F
 from pyspark.sql.types import DateType
 
 from cnpj_lakehouse.bronze import BRONZE_LAYER, PARTITION_COLUMN
+from cnpj_lakehouse.fingerprint import table_fingerprint
 from cnpj_lakehouse.normalize import parse_date
 from cnpj_lakehouse.silver import SILVER_LAYER, date_columns, duplicate_keys, is_empty_date
 from cnpj_lakehouse.spark import LakehouseConfig, get_spark
@@ -100,6 +105,7 @@ def main() -> int:
                 "invalid_cnpj": report["invalid_cnpj"],
                 "invalid_cnpj_dropped": report["invalid_cnpj_dropped"],
                 "duplicate_keys": duplicate_keys(silver, table),
+                "fingerprint": table_fingerprint(silver).as_dict(),
                 "dates": dates,
             }
             result["ok"] = (
@@ -130,8 +136,8 @@ def main() -> int:
         "",
         "| Table | Business key | Rows in | Rows out | Duplicates removed | Without key"
         " | Invalid CNPJ | Inserted | Updated | Unchanged | Table rows | Duplicate keys"
-        " | Date columns (failures) | OK |",
-        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|",
+        " | Date columns (failures) | Fingerprint | OK |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|---|",
     ]
     for r in results:
         dates_text = (
@@ -142,6 +148,7 @@ def main() -> int:
             f" | {r['duplicates_removed']:,} | {r['rows_without_key']:,} | {r['invalid_cnpj']:,}"
             f" | {r['rows_inserted']:,} | {r['rows_updated']:,} | {r['rows_unchanged']:,}"
             f" | {r['table_rows']:,} | {r['duplicate_keys']:,} | {dates_text}"
+            f" | `{r['fingerprint']['digest'][:12]}`"
             f" | {'yes' if r['ok'] else 'NO'} |"
         )
     (args.out / "silver-check.md").write_text("\n".join(lines) + "\n")
