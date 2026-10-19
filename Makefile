@@ -62,4 +62,4 @@ fmt:
 	ruff check --fix src tests scripts infra && black src tests scripts infra
 
 test:
-	pytest -m "not integration"
+	pytest -m "not integration and not delta" && pytest -m "delta and not integration"

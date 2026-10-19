@@ -1,17 +1,15 @@
 """RF-03 / RN-01 silver tests: typing, current-record choice, deduplication and quality counts.
 
 The pure functions run on tiny in-memory DataFrames (no file I/O, so also on Windows). The
-end-to-end tests run bronze and silver on the synthetic release of ``tests/fixtures/release``
-with Parquet (like ``tests/test_bronze.py``); the Delta path is proven by the CI ``bronze`` job.
+Delta MERGE (RF-04) and the end-to-end runs on the synthetic release need the Delta jars in a
+fresh JVM: they live in ``tests/test_silver_merge.py`` (marker ``delta``, own pytest run).
 """
 
 from __future__ import annotations
 
 import json
-import os
-import sys
 from collections.abc import Iterator
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -19,28 +17,26 @@ import pytest
 from pyspark.sql import DataFrame, Row, SparkSession
 from pyspark.sql.types import DateType, StringType, StructField, StructType, TimestampType
 
-from cnpj_lakehouse import bronze, silver
+from cnpj_lakehouse import silver
 from cnpj_lakehouse.bronze import INGEST_TS, PARTITION_COLUMN, SOURCE_FILE
 from cnpj_lakehouse.schemas import TABLES, get_table
 from cnpj_lakehouse.silver import (
     CNPJ_COLUMN,
     CNPJ_VALID_COLUMN,
+    ROW_HASH,
     RULES,
     InvalidCnpjPolicy,
     SilverOptions,
     build_silver,
+    change_condition,
     date_columns,
     duplicate_keys,
+    merge_condition,
     quality_counts,
     type_and_flag,
+    write_metrics,
 )
 
-needs_hadoop_fs = pytest.mark.skipif(
-    sys.platform == "win32" and not os.environ.get("HADOOP_HOME"),
-    reason="local Spark writes on Windows need HADOOP_HOME/winutils",
-)
-
-FIXTURE_RAW = Path(__file__).parent / "fixtures" / "release"
 COMPETENCIA = "2026-09"
 TS1 = datetime(2026, 10, 1, 8, 0)
 TS2 = datetime(2026, 10, 2, 8, 0)
@@ -318,7 +314,56 @@ def test_silver_columns_drop_every_helper(spark: SparkSession) -> None:
         PARTITION_COLUMN,
         CNPJ_COLUMN,
         CNPJ_VALID_COLUMN,
+        ROW_HASH,
     ]
+
+
+# --- MERGE helpers (RF-04, ADR 011) ------------------------------------------------------------
+
+
+def test_row_hash_ignores_the_bronze_metadata_but_not_the_content(spark: SparkSession) -> None:
+    base = {"cnpj_basico": "80300911", "razao_social": "ACME"}
+    rows = [
+        base,
+        {**base, PARTITION_COLUMN: "2026-10", INGEST_TS: TS2, SOURCE_FILE: "file:/raw/b.csv"},
+        {**base, "razao_social": "ACME LTDA"},
+    ]
+    hashes = [
+        build_silver(bronze_df(spark, "empresas", [row]), "empresas").first()[ROW_HASH]
+        for row in rows
+    ]
+    assert hashes[0] == hashes[1] != hashes[2]
+    assert len(hashes[0]) == 64
+
+
+def test_merge_condition_is_a_null_safe_join_on_the_business_key() -> None:
+    assert merge_condition(RULES["empresas"].key) == "t.`cnpj_basico` <=> s.`cnpj_basico`"
+    condition = merge_condition(RULES["socios"].key)
+    assert condition.count(" AND ") == 3 and condition.count("<=>") == 4
+
+
+def test_change_condition_compares_the_hash_and_never_goes_back_in_time() -> None:
+    assert change_condition() == (
+        "NOT (t.`_row_hash` <=> s.`_row_hash`) AND s.`competencia` >= t.`competencia`"
+    )
+
+
+def test_write_metrics_from_delta_commits() -> None:
+    merge = write_metrics(
+        3,
+        "MERGE",
+        {"numSourceRows": "10", "numTargetRowsInserted": "2", "numTargetRowsUpdated": "3"},
+    )
+    assert (merge.operation, merge.version, merge.inserted, merge.updated) == ("merge", 3, 2, 3)
+    assert merge.unchanged == 5
+    create = write_metrics(0, "WRITE", {"numOutputRows": "7"})
+    assert (create.operation, create.source_rows, create.inserted, create.updated) == (
+        "create",
+        7,
+        7,
+        0,
+    )
+    assert create.unchanged == 0
 
 
 # --- CLI ---------------------------------------------------------------------------------------
@@ -349,6 +394,12 @@ def test_main_writes_the_summary(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
         0,
         {},
         {},
+        "merge",
+        1,
+        2,
+        3,
+        3,
+        12,
     )
 
     def fake_run(spark: Any, competencia: str, bronze_root: str, output_root: str, **kw: Any):
@@ -367,6 +418,7 @@ def test_main_writes_the_summary(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     assert seen["options"].invalid_cnpj_policy is InvalidCnpjPolicy.DROP
     data = json.loads(out.read_text(encoding="utf-8"))
     assert data["invalid_cnpj_policy"] == "drop" and data["tables"][0]["rows_out"] == 8
+    assert data["tables"][0]["rows_inserted"] == 2 and data["tables"][0]["rows_updated"] == 3
 
 
 def test_main_returns_1_on_a_missing_table(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -376,54 +428,3 @@ def test_main_returns_1_on_a_missing_table(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(silver, "get_spark", lambda *a, **k: _FakeSpark())
     monkeypatch.setattr(silver, "run", fail)
     assert silver.main(["--competencia", COMPETENCIA]) == 1
-
-
-# --- end to end on the synthetic release (Parquet) ---------------------------------------------
-
-
-@pytest.fixture(scope="module")
-def lake(spark: SparkSession, tmp_path_factory: pytest.TempPathFactory) -> Path:
-    root = tmp_path_factory.mktemp("lake")
-    ts = datetime(2026, 10, 17, 12, 0, tzinfo=UTC)
-    bronze.run(
-        spark, COMPETENCIA, FIXTURE_RAW, (root / "bronze").as_posix(), fmt="parquet", ingest_ts=ts
-    )
-    return root
-
-
-@needs_hadoop_fs
-def test_run_builds_every_bronze_table_of_the_fixture(spark: SparkSession, lake: Path) -> None:
-    reports = silver.run(
-        spark,
-        COMPETENCIA,
-        (lake / "bronze").as_posix(),
-        (lake / "silver").as_posix(),
-        fmt="parquet",
-    )
-    by_table = {r.table: r for r in reports}
-    assert set(by_table) == {"empresas", "simples", "cnaes"}
-    for r in reports:
-        out = spark.read.parquet(f"{lake.as_posix()}/silver/{r.table}")
-        assert out.count() == r.rows_out > 0
-        assert duplicate_keys(out, r.table) == 0
-        assert r.rows_in == r.rows_out + r.duplicates_removed + r.rows_without_key
-        for name in date_columns(r.table):
-            assert isinstance(out.schema[name].dataType, DateType)
-            typed = out.where(out[name].isNotNull()).count()
-            assert typed == r.date_values[name] - r.date_parse_failures[name]
-    assert by_table["simples"].date_values["data_opcao_simples"] > 0
-
-
-@needs_hadoop_fs
-def test_rerun_replaces_the_month_and_requested_tables_must_exist(
-    spark: SparkSession, lake: Path
-) -> None:
-    args = (spark, COMPETENCIA, (lake / "bronze").as_posix(), (lake / "silver2").as_posix())
-    first = silver.run(*args, tables=["cnaes"], fmt="parquet")
-    second = silver.run(*args, tables=["cnaes"], fmt="parquet")
-    assert first[0].rows_out == second[0].rows_out
-    assert spark.read.parquet(f"{lake.as_posix()}/silver2/cnaes").count() == first[0].rows_out
-    with pytest.raises(ValueError, match="socios"):
-        silver.run(*args, tables=["socios"], fmt="parquet")
-    with pytest.raises(ValueError, match="no bronze table"):
-        silver.run(spark, "2020-01", *args[2:], fmt="parquet")
