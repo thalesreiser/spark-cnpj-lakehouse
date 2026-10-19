@@ -14,7 +14,7 @@ Rows whose key is **missing** after normalization (an empty or malformed `cnpj_b
 
 ## Decision
 
-Proposed defaults, each a one-line switch in `cnpj_lakehouse/silver.py`:
+Accepted defaults, each a one-line switch in `cnpj_lakehouse/silver.py`:
 
 1. `INVALID_CNPJ_POLICY = InvalidCnpjPolicy.FLAG`: an establishment whose CNPJ fails validation is **kept**, with `cnpj_valido = false`, and counted (`invalid_cnpj`). `--invalid-cnpj drop` (or `InvalidCnpjPolicy.DROP`) discards those rows instead and counts them (`invalid_cnpj_dropped`).
 2. `ZERO_CNPJ_IS_INVALID = True`: `00000000000000` is treated as invalid (`cnpj_valido = false`, counted in `invalid_cnpj` and separately in `zero_cnpj`), so it follows the policy of item 1.
