@@ -80,6 +80,25 @@ Implemented as pure `Column -> Column` functions in `cnpj_lakehouse/normalize.py
 **ANSI mode.** In Spark 3.5 `to_date` and `try_to_timestamp` raise on `20251340` when `spark.sql.ansi.enabled=true`, and on `2025011` with the default `spark.sql.legacy.timeParserPolicy=EXCEPTION`. `parse_date` validates year, month and day with arithmetic and only then calls `make_date`, and `parse_decimal` only casts values that match its pattern, so no function raises in either mode (the tests run with ANSI on and off).
 
 
+## Silver keys and current record
+
+`cnpj_lakehouse/silver.py` builds one silver table per bronze table (RF-03; tests in `tests/test_silver.py`). After the types are applied, rows whose key columns marked "not nullable" below are empty or malformed are discarded and counted (`rows_without_key`). Within each business key a window function (`row_number() over (partition by key order by ...)`) keeps the **current record**: the first row of the ordering below, every criterion descending (most recent first) with nulls last.
+
+| Table | Business key | Current record: ordering after `competencia` |
+|---|---|---|
+| `estabelecimentos` | `cnpj_basico` + `cnpj_ordem` + `cnpj_dv` (RN-01; all required) | `data_situacao_cadastral`, `data_inicio_atividade` |
+| `empresas` | `cnpj_basico` | (common tie-breakers only) |
+| `simples` | `cnpj_basico` | latest of `data_opcao_simples`, `data_exclusao_simples`, `data_opcao_mei`, `data_exclusao_mei` |
+| `socios` | `cnpj_basico` + `identificador_socio` + `cpf_cnpj_socio` + `nome_socio_razao_social` (only `cnpj_basico` required; an empty `cpf_cnpj_socio`, as for foreigners, is one group) | `data_entrada_sociedade` |
+| lookups (`cnaes`, `motivos`, `municipios`, `naturezas`, `paises`, `qualificacoes`) | `codigo` | (common tie-breakers only) |
+
+Every ordering starts with `competencia` (a later release wins) and ends with the common tie-breakers `_ingest_ts`, `_source_file` and a SHA-256 of the whole row, so the choice never depends on the physical order of the rows. The `socios` key is a natural key, since the source has no partner identifier: the CPF is masked (`***999999**`), so the name is needed to tell partners apart; the same person with two qualifications in one company collapses to one row (the most recent entry date).
+
+`estabelecimentos` gets two extra columns: `cnpj` (14 characters, base + order + DV) and `cnpj_valido` (check digits match and the CNPJ is not `00000000000000`). By default an invalid CNPJ is kept with `cnpj_valido = false`; `--invalid-cnpj drop` discards it. Both switches and their counts are described in [ADR 010](adr/010-invalid-and-all-zero-cnpj-in-silver.md) (proposed).
+
+The silver tables keep the bronze metadata (`_ingest_ts`, `_source_file`) and are partitioned by `competencia`; re-running a month replaces its partition. Each run writes counts per table to `build/silver-<competencia>.json`: rows in and out, duplicates removed, rows without key, invalid and all-zero CNPJs (and how many were dropped), and, per date column, the non-empty source values and those that failed to parse (a non-empty value that became `null`).
+
+
 ## Tables
 
 Files per release: `Empresas0-9`, `Estabelecimentos0-9`, `Socios0-9`, `Simples` and one zip per lookup table (37 files; see [`data-source.md`](data-source.md)).
