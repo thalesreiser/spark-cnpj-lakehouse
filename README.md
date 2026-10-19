@@ -179,6 +179,16 @@ The CI `bronze` job then runs `make silver` on the same 2026-09 subset and `scri
 
 **Idempotency guarantee (RF-04).** Re-running `make silver` for a month that is already loaded leaves every silver table identical: the MERGE inserts and updates nothing, and the table fingerprint (`cnpj_lakehouse.fingerprint.table_fingerprint`: row count plus an order-independent SHA-256 of every column except the load metadata `_ingest_ts`/`_source_file`) is the same before and after. A new month changes only the keys it updates or inserts, re-running it is again a no-op, and loading an older month never overwrites a newer record. This is proven by `tests/test_silver_idempotency.py` and on real data by the CI `bronze` job, which prints both fingerprints of the re-run in its job summary.
 
+#### Time travel (RF-06)
+
+```bash
+make time-travel                                         # silver empresas: history, N-1 vs N
+make time-travel TT_ARGS="--snapshot build/before.json"  # record the current version
+make time-travel TT_ARGS="--expected build/before.json"  # later: N-1 must reproduce it
+```
+
+Every silver load is one Delta version ([ADR 011](docs/adr/011-silver-current-state-merge.md)), so the state after an earlier run can be read back. `python -m cnpj_lakehouse.time_travel` runs `DESCRIBE HISTORY`, reads version N-1 with `versionAsOf` and with `timestampAsOf` (the N-1 commit timestamp), compares it with version N (rows, counts per `porte_empresa` / `natureza_juridica`, keys whose `_row_hash` changed) and fails if N-1 does not reproduce the aggregates recorded right after that run. It writes only aggregates and metadata to `build/time-travel/` (RST-01). The CI `bronze` job records `empresas` after the 2026-09 load, runs the demo after the synthetic 2026-10 month and publishes the report in the job summary. The notebook [`notebooks/01-time-travel.ipynb`](notebooks/01-time-travel.ipynb) walks through the three queries and explains that result.
+
 For development: `make install` (dependencies + pre-commit hooks), `make lint` and `make test` (fails below 80% coverage, RF-09). On Windows without `HADOOP_HOME`/winutils the Spark write tests are skipped, so coverage can fall below the threshold: run `pytest` (no threshold) or `make test COVERAGE_MIN=0` locally and rely on CI (Linux) for the enforced run. Limited memory? Set `SPARK_SAMPLE_FRACTION=0.1` in `.env` to process 10% of the data (RNF-03).
 
 ## Repository layout

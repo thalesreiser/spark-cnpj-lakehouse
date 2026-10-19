@@ -107,6 +107,10 @@ jobs:
             and ([.tables[] as $t | $b[0].tables[] | select(.table == $t.table)
             | .fingerprint == $t.fingerprint and .fingerprint.rows > 0] | length == $n and all)
             ' build/silver-check/silver-check.json
+      # RF-06: records the aggregates of the current silver version right after the run, so the
+      # time travel demo can prove that `versionAsOf` N-1 reproduces them after the next month.
+      - name: Record silver empresas before the next month (RF-06)
+        run: make time-travel TT_ARGS="--snapshot build/time-travel-${COMPETENCIA}.json"
       - name: Synthetic next month in bronze (RF-04, derived from the same month)
         run: >-
           docker compose -f infra/docker-compose.yml --profile client run --rm spark-client
@@ -123,6 +127,10 @@ jobs:
             and $t.rows_inserted == $e[0].expected_inserted and $t.rows_inserted > 0
             and $t.table_rows == $p.table_rows + $t.rows_inserted' build/silver-2026-10.json
           cat build/silver-check-2026-10/silver-check.md >> "$GITHUB_STEP_SUMMARY"
+      - name: make time-travel (RF-06, history, versionAsOf N-1 vs N, timestampAsOf)
+        run: |
+          make time-travel TT_ARGS="--expected build/time-travel-${COMPETENCIA}.json"
+          cat build/time-travel/time-travel.md >> "$GITHUB_STEP_SUMMARY"
       - name: Summary
         if: always()
         run: |
@@ -141,6 +149,7 @@ jobs:
             build/silver-*.json
             build/next-month.json
             build/silver-check*/
+            build/time-travel*
           retention-days: 30
           if-no-files-found: warn
       # RF-03 quality checks (task 3.4): blocking `error` rules fail the job; counts only (RST-01).

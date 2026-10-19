@@ -75,3 +75,10 @@ test:
 	pytest -m "not integration and not delta" --cov-fail-under=$(COVERAGE_MIN)
 	pytest -m "delta and not integration" --cov-append
 	coverage report --include="$(TRANSFORMS)" --fail-under=$(COVERAGE_MIN)
+
+.PHONY: time-travel
+# RF-06: DESCRIBE HISTORY, versionAsOf N-1 vs N and timestampAsOf on silver/<TABLE> (default
+# empresas); TT_ARGS e.g. "--snapshot build/x.json" or "--expected build/x.json" (ADR 011).
+TABLE ?= empresas
+time-travel:  ## RF-06 proof: version N-1 reproduces the recorded result (aggregates only)
+	$(SPARK_RUN) python -m cnpj_lakehouse.time_travel --table $(TABLE) --out build/time-travel $(TT_ARGS)
