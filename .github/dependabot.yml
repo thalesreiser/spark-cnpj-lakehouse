@@ -15,6 +15,9 @@ updates:
       # Spark 4 is a major migration (Scala 2.13, Delta 4, Java 17); it needs its own ADR.
       - dependency-name: "pyspark"
         update-types: ["version-update:semver-major"]
+      # Delta Lake 4.x only runs on Spark 4.x, so its majors follow the same migration.
+      - dependency-name: "delta-spark"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
