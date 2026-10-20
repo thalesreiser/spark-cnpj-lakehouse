@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Lakehouse with Spark and Delta Lake on Brazilian CNPJ open data"
 requires-python = ">=3.11,<3.12"
 dependencies = [
-  "pyspark==3.5.8",
+  "pyspark==3.5.9",
   "delta-spark==3.2.1",
   "requests>=2.33",
 ]
