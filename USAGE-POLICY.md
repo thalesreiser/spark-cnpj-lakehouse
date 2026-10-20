@@ -21,17 +21,24 @@ This is a portfolio project, built to demonstrate data engineering skills throug
 
 The MIT license applies to the **code**, not to the data it processes.
 
-- The repository **contains no raw data**. Data is downloaded from the official public sources at run time, and only small samples for tests are versioned.
+- The repository **contains no raw data**. Data is downloaded from the official public sources at run time. The only versioned data are **aggregated counts** in `notebooks/data/` (derived from the 2026-09 release; no rows, company names or personal data) and **synthetic** test fixtures.
 - The data belongs to its sources and follows their terms of use.
 - Whoever runs the project is responsible for using the data in accordance with Brazil's data protection law (**LGPD, Law 13,709/2018**) and the terms of the sources.
 - **CNPJ data (Brazilian Federal Revenue Service):** partner records come with CPFs (individual taxpayer IDs) partially masked by the source itself. **Do not** use this project to try to re-identify individuals, to cross-reference the data with other databases for that purpose, or to build profiles of people (project constraint RST-01; see also the LGPD).
 - Matching partners with the same name (RF-10) is a technical *record linkage* exercise with sample-based review, not a tool for identifying people.
 
+## Data sources and attribution
+
+Source: **Receita Federal do Brasil — Cadastro Nacional da Pessoa Jurídica (CNPJ), Dados Abertos**, downloaded from <https://arquivos.receitafederal.gov.br/public.php/dav/files/gn672Ad4CF8N6TK/Dados/Cadastros/CNPJ> (details in [`docs/data-source.md`](docs/data-source.md)).
+
+- This repository does not redistribute the data, except the aggregated counts and synthetic fixtures described above.
+- Receita Federal's terms of use apply to the data. The MIT license covers the code only.
+
 ## Security
 
 - No secret, key or credential may be committed. Create your own `.env` (ignored by Git) from `.env.example`.
 - The pre-commit hooks run **gitleaks** to detect secrets before every commit.
-- If you find a vulnerability, **do not open a public issue**: contact the author directly on GitHub or LinkedIn.
+- If you find a vulnerability, **do not open a public issue**: report it privately as described in [`SECURITY.md`](SECURITY.md) (Security tab → "Report a vulnerability").
 
 ## Contributions
 

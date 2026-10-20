@@ -263,6 +263,10 @@ The project follows a requirements engineering process inspired by ISO/IEC/IEEE 
 
 The data is public and downloaded straight from the official source at run time: **no raw data is committed** to this repository. Partner CPFs (individual taxpayer IDs) already come partially masked by the Receita Federal, and using the project to try to re-identify people is forbidden. Details in [`USAGE-POLICY.md`](USAGE-POLICY.md).
 
+### Data sources and attribution
+
+Source: **Receita Federal do Brasil — Cadastro Nacional da Pessoa Jurídica (CNPJ), Dados Abertos**, downloaded from <https://arquivos.receitafederal.gov.br/public.php/dav/files/gn672Ad4CF8N6TK/Dados/Cadastros/CNPJ> ([`docs/data-source.md`](docs/data-source.md)). The data is not redistributed here. The only data files in the repository are **aggregated counts** in `notebooks/data/` (derived from the 2026-09 release, no rows or company names) and synthetic test fixtures. Receita Federal's terms apply to the data; the MIT license covers the code only.
+
 ## Related projects
 
 This is the first of three data engineering projects developed in sequence:
