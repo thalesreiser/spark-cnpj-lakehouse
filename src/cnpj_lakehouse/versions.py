@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 PYTHON_VERSION = "3.11"
-SPARK_VERSION = "3.5.8"
+SPARK_VERSION = "3.5.9"
 SCALA_BINARY_VERSION = "2.12"
 DELTA_VERSION = "3.2.1"
 # Hadoop version bundled with PySpark 3.5.x (hadoop-client-*-3.3.4 jars).
