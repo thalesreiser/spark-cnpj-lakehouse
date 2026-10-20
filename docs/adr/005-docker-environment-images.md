@@ -40,3 +40,5 @@ In addition, PySpark requires the driver and the executors to run the same Pytho
 ## Update 2026-10-20: PySpark 3.5.8
 
 PySpark was bumped from 3.5.3 to 3.5.8 to fix CVE-2026-32773 (and CVE-2025-54920), which affect `pyspark` before 3.5.8. The image design is unchanged: Spark still comes from `pip install .` and the image tag follows `SPARK_VERSION` (`cnpj-lakehouse/spark:3.5.8`). PySpark 3.5.8 still bundles Hadoop 3.3.4, so `hadoop-aws` 3.3.4 and `aws-java-sdk-bundle` 1.12.262 stay. `delta-spark` 3.2.1 declares `pyspark>=3.5.3,<3.6.0` and targets Spark 3.5.x, so it stays too.
+
+Update 2026-10-20 (later): Dependabot patch/minor bump to PySpark 3.5.9 and Delta Lake 3.3.3 (Delta 3.3 supports Spark 3.5; same Hadoop 3.3.4 / Scala 2.12 line). The image build checks the bundled Hadoop version and the Maven SHA-1 of every jar.

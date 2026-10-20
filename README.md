@@ -124,7 +124,7 @@ make down              # stops everything (make down V=1 also deletes the MinIO 
 | MinIO S3 API | http://localhost:9000 |
 | MinIO console | http://localhost:9001 (user/password from `.env`; dev default `minioadmin`) |
 
-Spark applications run in the `spark-client` service, which uses the same image as the executors (Python 3.11, Spark 3.5.8, Delta 3.2.1, hadoop-aws 3.3.4). The reasons are in [ADR 005](docs/adr/005-docker-environment-images.md). In the code, the session comes from `cnpj_lakehouse.spark.get_spark("app-name")`, configured through environment variables (`S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `LAKEHOUSE_BUCKET`, `SPARK_MASTER_URL`).
+Spark applications run in the `spark-client` service, which uses the same image as the executors (Python 3.11, Spark 3.5.9, Delta 3.3.3, hadoop-aws 3.3.4). The reasons are in [ADR 005](docs/adr/005-docker-environment-images.md). In the code, the session comes from `cnpj_lakehouse.spark.get_spark("app-name")`, configured through environment variables (`S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `LAKEHOUSE_BUCKET`, `SPARK_MASTER_URL`).
 
 > The MinIO credentials in `.env.example` and in CI are for local development only. `.env` is never committed.
 
