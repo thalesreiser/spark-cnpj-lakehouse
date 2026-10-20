@@ -69,8 +69,9 @@ jobs:
             python scripts/gold_export.py --competencia "$COMPETENCIA" --out build/gold-export
           mkdir -p notebooks/data
           cp build/gold-export/* notebooks/data/
-          jq --arg f "$FILES" '. + {files_loaded: $f}' build/gold-export/export.json \
-            > notebooks/data/export.json
+          jq --arg f "$FILES" --slurpfile g "build/gold-${COMPETENCIA}.json" \
+            '. + {files_loaded: $f, silver: $g[0].silver, gold_checks_passed: $g[0].passed}' \
+            build/gold-export/export.json > notebooks/data/export.json
           ls -l notebooks/data
       - name: Execute the notebook
         run: |

@@ -77,6 +77,8 @@ The first 8 digits identify the **company**; order `0001` is usually the head of
 - How are active companies distributed by size in each region?
 - Which sectors have the highest share of closed or inactive companies?
 
+The notebook [`notebooks/02-business-questions.ipynb`](notebooks/02-business-questions.ipynb) answers them with charts on a real release subset (see [Gold](#gold-rf-05)).
+
 ## Stack
 
 | Layer | Technology | Why |
@@ -196,6 +198,8 @@ make gold COMPETENCIA=2026-09   # silver current state -> gold tables; fails if 
 ```
 
 `make gold` runs `python -m cnpj_lakehouse.gold` on the whole silver tables (the current state, [ADR 011](docs/adr/011-silver-current-state-merge.md); `COMPETENCIA` labels the summary) and writes three Delta tables under `s3a://<bucket>/gold/`: `gold_empresas_cnae_uf_ano` (establishments by main CNAE, state and opening year), `gold_distribuicao_porte` (companies by size, with share) and `gold_situacao_setor` (establishments by registration status and CNAE section/division). Lookups are joined with a broadcast hint ([ADR 003](docs/adr/003-broadcast-join-for-lookup-tables.md)); each table is overwritten whole on every run, since gold is derived. Establishments with an invalid CNPJ are counted (`--exclude-invalid-cnpj` leaves them out) and null codes form their own group, so the gold sums equal the silver rows: the run checks it and exits non-zero otherwise ([ADR 012](docs/adr/012-gold-aggregations-and-counting-rules.md)). It writes only row counts and the sum checks to `build/gold-<COMPETENCIA>.json` / `.md`. The tables and columns are in the [data dictionary](docs/data-dictionary.md#gold-tables). The CI `bronze` job loads no `Estabelecimentos` file, so it builds only `gold_distribuicao_porte` on real data; the other two run end to end on Delta in `tests/test_gold_delta.py`.
+
+Business questions (task 5.3): the manual **Gold analysis** workflow (`.github/workflows/gold-analysis.yml`, `workflow_dispatch` only) loads `lookups` + `Empresas1` + `Estabelecimentos1` by default (`files` input), runs bronze, silver and gold, exports small roll-ups of the gold tables (`scripts/gold_export.py`: counts by year/UF, CNAE, size, status x sector; no rows) and executes [`notebooks/02-business-questions.ipynb`](notebooks/02-business-questions.ipynb) on them (`pip install -e ".[notebooks]"`). To regenerate: `gh workflow run gold-analysis.yml -f competencia=2026-09`, download the `gold-analysis-<COMPETENCIA>` artifact and copy `notebooks/` over the repository. One `Estabelecimentos` file is a sample of the release, so only shares and rankings are meaningful.
 
 For development: `make install` (dependencies + pre-commit hooks), `make lint` and `make test` (fails below 80% coverage, RF-09). On Windows without `HADOOP_HOME`/winutils the Spark write tests are skipped, so coverage can fall below the threshold: run `pytest` (no threshold) or `make test COVERAGE_MIN=0` locally and rely on CI (Linux) for the enforced run. Limited memory? Set `SPARK_SAMPLE_FRACTION=0.1` in `.env` to process 10% of the data (RNF-03).
 
