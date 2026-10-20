@@ -189,6 +189,14 @@ make time-travel TT_ARGS="--expected build/before.json"  # later: N-1 must repro
 
 Every silver load is one Delta version ([ADR 011](docs/adr/011-silver-current-state-merge.md)), so the state after an earlier run can be read back. `python -m cnpj_lakehouse.time_travel` runs `DESCRIBE HISTORY`, reads version N-1 with `versionAsOf` and with `timestampAsOf` (the N-1 commit timestamp), compares it with version N (rows, counts per `porte_empresa` / `natureza_juridica`, keys whose `_row_hash` changed) and fails if N-1 does not reproduce the aggregates recorded right after that run. It writes only aggregates and metadata to `build/time-travel/` (RST-01). The CI `bronze` job records `empresas` after the 2026-09 load, runs the demo after the synthetic 2026-10 month and publishes the report in the job summary. The notebook [`notebooks/01-time-travel.ipynb`](notebooks/01-time-travel.ipynb) walks through the three queries and explains that result.
 
+#### Gold (RF-05)
+
+```bash
+make gold COMPETENCIA=2026-09   # silver current state -> gold tables; fails if a sum check fails
+```
+
+`make gold` runs `python -m cnpj_lakehouse.gold` on the whole silver tables (the current state, [ADR 011](docs/adr/011-silver-current-state-merge.md); `COMPETENCIA` labels the summary) and writes three Delta tables under `s3a://<bucket>/gold/`: `gold_empresas_cnae_uf_ano` (establishments by main CNAE, state and opening year), `gold_distribuicao_porte` (companies by size, with share) and `gold_situacao_setor` (establishments by registration status and CNAE section/division). Lookups are joined with a broadcast hint ([ADR 003](docs/adr/003-broadcast-join-for-lookup-tables.md)); each table is overwritten whole on every run, since gold is derived. Establishments with an invalid CNPJ are counted (`--exclude-invalid-cnpj` leaves them out) and null codes form their own group, so the gold sums equal the silver rows: the run checks it and exits non-zero otherwise ([ADR 012](docs/adr/012-gold-aggregations-and-counting-rules.md)). It writes only row counts and the sum checks to `build/gold-<COMPETENCIA>.json` / `.md`. The tables and columns are in the [data dictionary](docs/data-dictionary.md#gold-tables). The CI `bronze` job loads no `Estabelecimentos` file, so it builds only `gold_distribuicao_porte` on real data; the other two run end to end on Delta in `tests/test_gold_delta.py`.
+
 For development: `make install` (dependencies + pre-commit hooks), `make lint` and `make test` (fails below 80% coverage, RF-09). On Windows without `HADOOP_HOME`/winutils the Spark write tests are skipped, so coverage can fall below the threshold: run `pytest` (no threshold) or `make test COVERAGE_MIN=0` locally and rely on CI (Linux) for the enforced run. Limited memory? Set `SPARK_SAMPLE_FRACTION=0.1` in `.env` to process 10% of the data (RNF-03).
 
 ## Repository layout
@@ -211,7 +219,7 @@ For development: `make install` (dependencies + pre-commit hooks), `make lint` a
 | 2. Bronze ingestion | Parameterized download, schemas, Delta with metadata | 8 h | 🚧 |
 | 3. Silver and quality | Normalization, deduplication, tests, quality checks | 10 h | 🚧 |
 | 4. Incremental and history | MERGE, idempotency, time travel | 7 h | ⬜ |
-| 5. Gold and analysis | Aggregations, reconciliation, notebook | 5 h | ⬜ |
+| 5. Gold and analysis | Aggregations, reconciliation, notebook | 5 h | 🚧 |
 | 6. Optimization and benchmark | Baseline, tuning, OPTIMIZE/VACUUM, `benchmark.md` | 9 h | ⬜ |
 | 7. Publication | CI, diagrams, ADRs, traceability, final README | 5 h | ⬜ |
 

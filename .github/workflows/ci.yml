@@ -168,6 +168,23 @@ jobs:
           path: build/quality-${{ env.COMPETENCIA }}/
           retention-days: 30
           if-no-files-found: warn
+      # RF-05 (ADR 012): gold from the silver current state, sums reconciled with silver. CI loads
+      # no Estabelecimentos file (time and disk), so only gold_distribuicao_porte is built on real
+      # data here; the establishment tables run end to end on Delta in tests/test_gold_delta.py.
+      - name: make gold (RF-05, gold sums == eligible silver rows; counts only)
+        run: |
+          make gold COMPETENCIA="$COMPETENCIA"
+          cat "build/gold-${COMPETENCIA}.md" >> "$GITHUB_STEP_SUMMARY"
+          jq -e '.passed and ([.tables[] | select(.table == "gold_distribuicao_porte"
+            and .rows > 0)] | length == 1)' "build/gold-${COMPETENCIA}.json"
+      - name: Upload gold summary (no data)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gold-${{ env.COMPETENCIA }}
+          path: build/gold-${{ env.COMPETENCIA }}.*
+          retention-days: 30
+          if-no-files-found: warn
       - name: Service logs
         if: always()
         run: make logs

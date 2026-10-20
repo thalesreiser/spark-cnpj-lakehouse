@@ -14,7 +14,7 @@ COMPOSE = docker compose $(ENV_FILE) -f infra/docker-compose.yml
 # Commands run in the driver (spark-client container), on the same image as the executors.
 SPARK_RUN = $(COMPOSE) --profile client run --rm spark-client
 
-.PHONY: install up down smoke logs ps download bronze bronze-check silver silver-check quality run lint test fmt
+.PHONY: install up down smoke logs ps download bronze bronze-check silver silver-check quality gold run lint test fmt
 
 install:
 	pip install -e ".[dev]" && pre-commit install
@@ -56,6 +56,9 @@ quality:  ## RF-03: quality checks of silver (nulls, domains, uniqueness); fails
 	$(SPARK_RUN) python -m cnpj_lakehouse.quality --competencia $(COMPETENCIA) \
 		$(if $(strip $(TABLES)),--tables $(TABLES),) --report build/quality-$(COMPETENCIA)
 
+gold:  ## RF-05: silver current state -> s3a://<bucket>/gold/<table>/ (Delta overwrite); sums reconciled
+	$(SPARK_RUN) python -m cnpj_lakehouse.gold --competencia $(COMPETENCIA) --summary build/gold-$(COMPETENCIA).json
+
 run:
 	python -m cnpj_lakehouse.pipeline --competencia $(COMPETENCIA)
 
@@ -69,7 +72,7 @@ fmt:
 # transformation modules alone (CI runs `make test` on Linux, where no test is skipped). The Delta
 # tests need a fresh JVM, so they run in a second pytest whose coverage is appended (--cov-append).
 COVERAGE_MIN ?= 80
-TRANSFORMS = */cnpj_lakehouse/normalize.py,*/cnpj_lakehouse/bronze.py,*/cnpj_lakehouse/silver.py,*/cnpj_lakehouse/schemas.py
+TRANSFORMS = */cnpj_lakehouse/normalize.py,*/cnpj_lakehouse/bronze.py,*/cnpj_lakehouse/silver.py,*/cnpj_lakehouse/schemas.py,*/cnpj_lakehouse/gold.py
 
 test:
 	pytest -m "not integration and not delta" --cov-fail-under=$(COVERAGE_MIN)

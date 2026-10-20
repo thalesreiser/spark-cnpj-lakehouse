@@ -218,6 +218,59 @@ All six share the same layout: `codigo` (string, not nullable: the code, with le
 | `paises` | `Paises.zip` | 255 | `013` AFEGANISTAO | `estabelecimentos.pais`, `socios.pais` |
 | `qualificacoes` | `Qualificacoes.zip` | 68 | `05` Administrador | `empresas.qualificacao_responsavel`, `socios.qualificacao_socio`, `socios.qualificacao_representante_legal` |
 
+## Gold tables
+
+`cnpj_lakehouse/gold.py` (`make gold`, RF-05; tests in `tests/test_gold.py` and `tests/test_gold_delta.py`) aggregates the whole silver tables (current state, ADR 011) into three Delta tables under `s3a://<bucket>/gold/`, overwritten whole on every run and not partitioned. The rules are in [ADR 012](adr/012-gold-aggregations-and-counting-rules.md):
+
+- **Unit.** CNAE, state, opening date and registration status belong to the establishment, so the first and third tables count **establishments**; size belongs to the company, so `gold_distribuicao_porte` counts **companies** (`cnpj_basico`). An `empresas` column inside an establishment table is the number of distinct `cnpj_basico` in that row and does **not** add up across rows (a company with branches in two states counts in both).
+- **Invalid CNPJs** (`cnpj_valido = false`, ADR 010) are counted by default; `--exclude-invalid-cnpj` leaves them out. The summary reports how many there are.
+- **Nulls.** A null code (CNAE, UF, size, status) or a null opening date is a group of its own (null key), never dropped. A description is null when its code is null or missing from the lookup (an out-of-domain size, a CNAE not in `cnaes`).
+- **Descriptions.** `cnae_descricao` comes from the silver `cnaes` lookup; size, status and CNAE section names come from the documented domains (this dictionary; IBGE CNAE 2.x structure for the sections), joined with a broadcast hint (ADR 003).
+
+### `gold_empresas_cnae_uf_ano`
+
+Grain: one row per (`cnae_fiscal_principal`, `uf`, `ano_inicio_atividade`).
+
+| Column | Type | Description |
+|---|---|---|
+| `cnae_fiscal_principal` | string | Main CNAE of the establishment (7 digits) |
+| `cnae_descricao` | string | CNAE description (`cnaes` lookup) |
+| `uf` | string | State of the establishment |
+| `ano_inicio_atividade` | int | Year of `data_inicio_atividade` |
+| `estabelecimentos` | long | Establishments (additive: sums to the eligible silver rows) |
+| `estabelecimentos_ativos` | long | Establishments with `situacao_cadastral = 02` (active; additive) |
+| `empresas` | long | Distinct companies (`cnpj_basico`) in the row (not additive) |
+
+### `gold_distribuicao_porte`
+
+Grain: one row per `porte_empresa`.
+
+| Column | Type | Description |
+|---|---|---|
+| `porte_empresa` | string | Company size code (`00`, `01`, `03`, `05`) |
+| `porte_descricao` | string | NÃO INFORMADO, MICRO EMPRESA, EMPRESA DE PEQUENO PORTE, DEMAIS |
+| `empresas` | long | Companies (additive: sums to the silver `empresas` rows) |
+| `participacao` | double | Share of all companies (sums to 1) |
+| `estabelecimentos` | long | Eligible establishments of these companies, joined by `cnpj_basico`; null when silver has no establishments. Establishments whose company is not in silver are left out (`without_company` in the summary) |
+| `estabelecimentos_ativos` | long | Of those, active ones |
+| `empresas_ativas` | long | Companies with at least one active establishment |
+
+### `gold_situacao_setor`
+
+Grain: one row per (`situacao_cadastral`, `cnae_divisao`); the section follows from the division.
+
+| Column | Type | Description |
+|---|---|---|
+| `situacao_cadastral` | string | Registration status code (`01`, `02`, `03`, `04`, `08`) |
+| `situacao_descricao` | string | NULA, ATIVA, SUSPENSA, INAPTA, BAIXADA |
+| `cnae_secao` | string | CNAE section letter (`A`-`U`) |
+| `cnae_secao_descricao` | string | Section name |
+| `cnae_divisao` | string | CNAE division: first 2 digits of the main CNAE |
+| `estabelecimentos` | long | Establishments (additive) |
+| `empresas` | long | Distinct companies in the row (not additive) |
+
+**Run summary and sum checks.** `build/gold-<competencia>.json` / `.md` hold the row count of each gold table, the silver counts behind them (`empresas`, `estabelecimentos`, `invalid_cnpj`, `eligible`, `eligible_active`, `without_company`) and the checks: `estabelecimentos` of the two establishment tables = eligible silver establishments; `estabelecimentos_ativos` = eligible active ones; `gold_distribuicao_porte.empresas` = silver companies, `participacao` sums to 1, `estabelecimentos` = eligible minus `without_company`. Any failed check makes the run exit with code 1. No data rows are written (RST-01). The full silver x gold reconciliation is task 5.2.
+
 ## Evidence from the 2026-09 release
 
 Checked on 2026-10-16 without downloading the large files: the six lookup zips were downloaded whole (72 KB) to a temporary folder outside the repository; for `Empresas1`, `Estabelecimentos1`, `Socios1` and `Simples` only the first 256 KB to 1 MB were requested with an HTTP `Range` header and the beginning of the deflate stream after the zip local file header was decompressed. The last (truncated) line was discarded.
