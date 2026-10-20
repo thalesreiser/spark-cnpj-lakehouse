@@ -1,0 +1,3 @@
+# The repository owner reviews every change; Dependabot PRs request this review automatically
+# (Dependabot's own `reviewers` option was retired in favour of CODEOWNERS).
+* @thalesreiser
