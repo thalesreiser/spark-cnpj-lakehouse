@@ -13,7 +13,7 @@ jobs:
   lint-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
@@ -34,7 +34,7 @@ jobs:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Docker versions
         run: docker version --format '{{.Server.Version}}' && docker compose version
       - name: make up
@@ -65,7 +65,7 @@ jobs:
       # The row-count proof needs every row: no sampling (RNF-03).
       SPARK_SAMPLE_FRACTION: "1.0"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
