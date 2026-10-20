@@ -1,0 +1,28 @@
+# Dependabot version updates (security alerts are enabled in the repository settings).
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      python-minor-patch:
+        update-types: ["minor", "patch"]
+    ignore:
+      # Spark 4 is a major migration (Scala 2.13, Delta 4, Java 17); it needs its own ADR.
+      - dependency-name: "pyspark"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      actions-minor-patch:
+        update-types: ["minor", "patch"]
