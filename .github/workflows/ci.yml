@@ -177,12 +177,21 @@ jobs:
           cat "build/gold-${COMPETENCIA}.md" >> "$GITHUB_STEP_SUMMARY"
           jq -e '.passed and ([.tables[] | select(.table == "gold_distribuicao_porte"
             and .rows > 0)] | length == 1)' "build/gold-${COMPETENCIA}.json"
+      # Task 5.2: gold recomputed independently from silver (total, by size; the UF and status
+      # breakdowns need Estabelecimentos, proven on synthetic Delta data in test_gold_delta.py).
+      - name: make reconcile (RF-05, gold totals == silver, by size; counts only)
+        run: |
+          make reconcile COMPETENCIA="$COMPETENCIA"
+          cat build/reconcile/reconcile.md >> "$GITHUB_STEP_SUMMARY"
+          jq -e '.passed and (.tables == ["gold_distribuicao_porte"])' build/reconcile/reconcile.json
       - name: Upload gold summary (no data)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gold-${{ env.COMPETENCIA }}
-          path: build/gold-${{ env.COMPETENCIA }}.*
+          path: |
+            build/gold-${{ env.COMPETENCIA }}.*
+            build/reconcile/
           retention-days: 30
           if-no-files-found: warn
       - name: Service logs
