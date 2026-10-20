@@ -16,7 +16,7 @@ Baseline of the main job before any tuning (task 6.1). The tuning itself is task
 |---|---|
 | Runner | GitHub-hosted `ubuntu-latest` (image `ubuntu24 20261018.339.1`). The repository is public since 2026-10-20, so the runner has **4 vCPU and 15.6 GiB RAM** (the trial runs below were on the 2 vCPU / 8 GB private-repository runner); recorded in the job summary and in `benchmark.json` |
 | Stack | Docker Compose of the project ([ADR 005](adr/005-docker-environment-images.md)): 1 Spark master, 1 worker (2 cores, 2 GB), driver in `spark-client`, MinIO (s3a) |
-| Versions | **Baseline measured on Spark 3.5.3**, Delta Lake 3.2.1, Python 3.11, Java 17 (`cnpj_lakehouse/versions.py`). The project moves to Spark 3.5.8 (security fix, same data: the silver fingerprints of CI are identical on both versions); task 6.2 measures on 3.5.8, so a small part of any difference may come from the patch release |
+| Versions | **Baseline measured on Spark 3.5.3**, Delta Lake 3.2.1, Python 3.11, Java 17 (`cnpj_lakehouse/versions.py`). The project moved to Spark 3.5.8 afterwards (#26, security fix, same data: the silver fingerprints of CI are identical on both versions); task 6.2 measures on 3.5.8, so a small part of any difference may come from the patch release |
 | Key configs | `spark.executor.memory=1g`, `spark.sql.adaptive.enabled=true`, everything else at the Spark defaults (e.g. `spark.sql.shuffle.partitions=200`, `spark.sql.autoBroadcastJoinThreshold=10MB`); the properties actually set are read from the event log |
 
 ## Method
