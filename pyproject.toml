@@ -11,6 +11,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-cov>=5", "chispa>=0.10", "ruff>=0.6", "black>=24", "mypy>=1.11", "types-requests>=2.32", "pre-commit>=3.8"]
+# Task 5.3: executes notebooks/02-business-questions.ipynb (manual `Gold analysis` workflow).
+notebooks = ["pandas>=2.2", "matplotlib>=3.8", "nbconvert>=7.16", "ipykernel>=6.29"]
 
 [build-system]
 requires = ["setuptools>=68"]

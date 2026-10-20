@@ -1,0 +1,98 @@
+# Task 5.3 (epic 5): builds gold on a real release subset that includes Estabelecimentos, exports
+# small roll-ups of the gold tables (aggregates only, RST-01) and executes the business questions
+# notebook on them. Manual only: it downloads and processes ~0.5 GB zipped and takes ~30-45 min,
+# and Actions minutes are limited. The artifact holds the executed notebook, the CSV roll-ups and
+# the run summaries; no raw data, rows, names or CNPJs are uploaded.
+name: Gold analysis
+
+on:
+  workflow_dispatch:
+    inputs:
+      competencia:
+        description: "Reference month (COMPETENCIA), YYYY-MM"
+        required: true
+        default: "2026-09"
+      files:
+        description: "Files or groups to load (must include lookups, Empresas* and Estabelecimentos*). Estabelecimentos0 alone is 2.2 GB zipped."
+        required: true
+        default: "lookups Empresas1 Estabelecimentos1"
+
+permissions:
+  contents: read
+
+jobs:
+  gold-analysis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      COMPETENCIA: ${{ inputs.competencia }}
+      FILES: ${{ inputs.files }}
+      SPARK_SAMPLE_FRACTION: "1.0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Validate the inputs
+        # Both end up unquoted in a make recipe: reject anything else before it reaches a shell.
+        run: |
+          if ! [[ "$COMPETENCIA" =~ ^[0-9]{4}-(0[1-9]|1[0-2])$ ]]; then
+            echo "::error::competencia must be YYYY-MM"; exit 1
+          fi
+          if ! [[ "$FILES" =~ ^[A-Za-z0-9.,\ ]+$ ]]; then
+            echo "::error::files may only contain letters, digits, dots, commas and spaces"; exit 1
+          fi
+      - name: Install the package (with the notebook extra)
+        run: pip install -e ".[notebooks]"
+      - name: make download
+        run: make download COMPETENCIA="$COMPETENCIA" FILES="$FILES" && df -h .
+      - name: make up
+        run: make up
+      - name: make bronze
+        run: make bronze COMPETENCIA="$COMPETENCIA"
+      - name: Free the raw files (bronze holds them now)
+        run: rm -rf "data/raw/${COMPETENCIA}"/*.zip && df -h .
+      - name: make silver
+        run: make silver COMPETENCIA="$COMPETENCIA"
+      - name: make gold (sums reconciled with silver)
+        run: |
+          make gold COMPETENCIA="$COMPETENCIA"
+          cat "build/gold-${COMPETENCIA}.md" >> "$GITHUB_STEP_SUMMARY"
+          jq -e '.passed and ([.tables[] | select(.rows > 0)] | length == 3)' \
+            "build/gold-${COMPETENCIA}.json"
+      - name: Export the gold roll-ups (aggregates only)
+        run: |
+          docker compose -f infra/docker-compose.yml --profile client run --rm spark-client \
+            python scripts/gold_export.py --competencia "$COMPETENCIA" --out build/gold-export
+          mkdir -p notebooks/data
+          cp build/gold-export/* notebooks/data/
+          jq --arg f "$FILES" --slurpfile g "build/gold-${COMPETENCIA}.json" \
+            '. + {files_loaded: $f, silver: $g[0].silver, gold_checks_passed: $g[0].passed}' \
+            build/gold-export/export.json > notebooks/data/export.json
+          ls -l notebooks/data
+      - name: Execute the notebook
+        run: |
+          jupyter nbconvert --to notebook --execute --inplace notebooks/02-business-questions.ipynb
+          ls -l notebooks/02-business-questions.ipynb
+      - name: Upload the notebook and the roll-ups (no raw data)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gold-analysis-${{ env.COMPETENCIA }}
+          path: |
+            notebooks/02-business-questions.ipynb
+            notebooks/data/
+            build/bronze-${{ env.COMPETENCIA }}.json
+            build/silver-${{ env.COMPETENCIA }}.json
+            build/gold-${{ env.COMPETENCIA }}.*
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Service logs
+        if: failure()
+        run: make logs
+      - name: make down
+        if: always()
+        run: make down V=1
