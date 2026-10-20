@@ -66,7 +66,7 @@ jobs:
           { echo '```json'; cat build/fixture-cnpjs.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload the summary (counts only)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fixture-cnpjs-${{ env.COMPETENCIA }}
           path: build/fixture-cnpjs.json
