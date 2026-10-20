@@ -208,7 +208,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     initial = json.loads((setup_dir / "silver-initial.json").read_text(encoding="utf-8"))
     silver_tables = [t["table"] for t in initial["tables"]]
     median_dir = out / f"run-{summary['median_run'] + 1}"
-    gold_paths = json.loads((median_dir / "gold.json").read_text(encoding="utf-8"))["paths"]
+    gold_summary = json.loads((median_dir / "gold.json").read_text(encoding="utf-8"))
+    gold_paths = {t["table"]: t["path"] for t in gold_summary["tables"]}
     tables = {f"bronze/{t}": cfg.path(BRONZE_LAYER, t) for t in silver_tables}
     tables |= {f"silver/{t}": f"{silver}/{t}" for t in silver_tables}
     tables |= {f"gold/{t}": p for t, p in gold_paths.items()}
