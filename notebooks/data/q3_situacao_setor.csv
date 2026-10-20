@@ -1,0 +1,425 @@
+situacao_cadastral,situacao_descricao,cnae_secao,cnae_secao_descricao,cnae_divisao,estabelecimentos,empresas
+01,NULA,A,"Agricultura, pecuária, produção florestal, pesca e aquicultura",01,18,18
+01,NULA,A,"Agricultura, pecuária, produção florestal, pesca e aquicultura",02,5,5
+01,NULA,A,"Agricultura, pecuária, produção florestal, pesca e aquicultura",03,1,1
+01,NULA,B,Indústrias extrativas,08,4,4
+01,NULA,C,Indústrias de transformação,10,119,119
+01,NULA,C,Indústrias de transformação,11,4,4
+01,NULA,C,Indústrias de transformação,12,2,2
+01,NULA,C,Indústrias de transformação,13,45,45
+01,NULA,C,Indústrias de transformação,14,220,220
+01,NULA,C,Indústrias de transformação,15,84,84
+01,NULA,C,Indústrias de transformação,16,39,39
+01,NULA,C,Indústrias de transformação,17,6,6
+01,NULA,C,Indústrias de transformação,18,37,37
+01,NULA,C,Indústrias de transformação,20,12,12
+01,NULA,C,Indústrias de transformação,22,13,13
+01,NULA,C,Indústrias de transformação,23,27,27
+01,NULA,C,Indústrias de transformação,24,4,4
+01,NULA,C,Indústrias de transformação,25,75,75
+01,NULA,C,Indústrias de transformação,26,2,2
+01,NULA,C,Indústrias de transformação,27,1,1
+01,NULA,C,Indústrias de transformação,28,1,1
+01,NULA,C,Indústrias de transformação,29,1,1
+01,NULA,C,Indústrias de transformação,30,1,1
+01,NULA,C,Indústrias de transformação,31,48,48
+01,NULA,C,Indústrias de transformação,32,92,92
+01,NULA,C,Indústrias de transformação,33,50,50
+01,NULA,D,Eletricidade e gás,35,2,1
+01,NULA,E,"Água, esgoto, atividades de gestão de resíduos e descontaminação",37,1,1
+01,NULA,E,"Água, esgoto, atividades de gestão de resíduos e descontaminação",38,12,12
+01,NULA,F,Construção,41,61,58
+01,NULA,F,Construção,42,12,12
+01,NULA,F,Construção,43,464,464
+01,NULA,G,Comércio; reparação de veículos automotores e motocicletas,45,352,352
+01,NULA,G,Comércio; reparação de veículos automotores e motocicletas,46,223,223
+01,NULA,G,Comércio; reparação de veículos automotores e motocicletas,47,3006,3003
+01,NULA,H,"Transporte, armazenagem e correio",49,191,190
+01,NULA,H,"Transporte, armazenagem e correio",50,1,1
+01,NULA,H,"Transporte, armazenagem e correio",51,2,2
+01,NULA,H,"Transporte, armazenagem e correio",52,41,41
+01,NULA,H,"Transporte, armazenagem e correio",53,38,38
+01,NULA,I,Alojamento e alimentação,55,17,17
+01,NULA,I,Alojamento e alimentação,56,718,718
+01,NULA,J,Informação e comunicação,58,27,27
+01,NULA,J,Informação e comunicação,59,7,7
+01,NULA,J,Informação e comunicação,60,3,3
+01,NULA,J,Informação e comunicação,61,9,8
+01,NULA,J,Informação e comunicação,62,17,17
+01,NULA,J,Informação e comunicação,63,37,37
+01,NULA,K,"Atividades financeiras, de seguros e serviços relacionados",64,53,53
+01,NULA,K,"Atividades financeiras, de seguros e serviços relacionados",65,3,3
+01,NULA,K,"Atividades financeiras, de seguros e serviços relacionados",66,22,22
+01,NULA,L,Atividades imobiliárias,68,15,15
+01,NULA,M,"Atividades profissionais, científicas e técnicas",69,105,105
+01,NULA,M,"Atividades profissionais, científicas e técnicas",70,16,16
+01,NULA,M,"Atividades profissionais, científicas e técnicas",71,10,10
+01,NULA,M,"Atividades profissionais, científicas e técnicas",72,3,3
+01,NULA,M,"Atividades profissionais, científicas e técnicas",73,112,112
+01,NULA,M,"Atividades profissionais, científicas e técnicas",74,92,92
+01,NULA,N,Atividades administrativas e serviços complementares,77,63,63
+01,NULA,N,Atividades administrativas e serviços complementares,78,24,24
+01,NULA,N,Atividades administrativas e serviços complementares,79,39,39
+01,NULA,N,Atividades administrativas e serviços complementares,80,8,8
+01,NULA,N,Atividades administrativas e serviços complementares,81,125,125
+01,NULA,N,Atividades administrativas e serviços complementares,82,318,317
+01,NULA,O,"Administração pública, defesa e seguridade social",84,50,41
+01,NULA,P,Educação,85,186,186
+01,NULA,Q,Saúde humana e serviços sociais,86,37,37
+01,NULA,Q,Saúde humana e serviços sociais,87,14,14
+01,NULA,Q,Saúde humana e serviços sociais,88,180,177
+01,NULA,R,"Artes, cultura, esporte e recreação",90,11,11
+01,NULA,R,"Artes, cultura, esporte e recreação",91,3,3
+01,NULA,R,"Artes, cultura, esporte e recreação",92,5,5
+01,NULA,R,"Artes, cultura, esporte e recreação",93,49,49
+01,NULA,S,Outras atividades de serviços,94,694,694
+01,NULA,S,Outras atividades de serviços,95,332,332
+01,NULA,S,Outras atividades de serviços,96,693,693
+01,NULA,T,Serviços domésticos,97,16,16
+01,NULA,U,Organismos internacionais e outras instituições extraterritoriais,99,2,2
+02,ATIVA,A,"Agricultura, pecuária, produção florestal, pesca e aquicultura",01,60533,56659
+02,ATIVA,A,"Agricultura, pecuária, produção florestal, pesca e aquicultura",02,2117,1942
+02,ATIVA,A,"Agricultura, pecuária, produção florestal, pesca e aquicultura",03,1109,1105
+02,ATIVA,B,Indústrias extrativas,05,5,4
+02,ATIVA,B,Indústrias extrativas,06,80,56
+02,ATIVA,B,Indústrias extrativas,07,187,165
+02,ATIVA,B,Indústrias extrativas,08,1483,1411
+02,ATIVA,B,Indústrias extrativas,09,135,123
+02,ATIVA,C,Indústrias de transformação,10,14661,14521
+02,ATIVA,C,Indústrias de transformação,11,717,703
+02,ATIVA,C,Indústrias de transformação,12,45,45
+02,ATIVA,C,Indústrias de transformação,13,4112,4098
+02,ATIVA,C,Indústrias de transformação,14,16030,16006
+02,ATIVA,C,Indústrias de transformação,15,1872,1855
+02,ATIVA,C,Indústrias de transformação,16,3148,3127
+02,ATIVA,C,Indústrias de transformação,17,1161,1154
+02,ATIVA,C,Indústrias de transformação,18,4047,4040
+02,ATIVA,C,Indústrias de transformação,19,107,100
+02,ATIVA,C,Indústrias de transformação,20,1311,1273
+02,ATIVA,C,Indústrias de transformação,21,103,100
+02,ATIVA,C,Indústrias de transformação,22,1953,1936
+02,ATIVA,C,Indústrias de transformação,23,4418,4385
+02,ATIVA,C,Indústrias de transformação,24,371,355
+02,ATIVA,C,Indústrias de transformação,25,10805,10775
+02,ATIVA,C,Indústrias de transformação,26,446,441
+02,ATIVA,C,Indústrias de transformação,27,679,661
+02,ATIVA,C,Indústrias de transformação,28,1828,1813
+02,ATIVA,C,Indústrias de transformação,29,1029,1015
+02,ATIVA,C,Indústrias de transformação,30,203,200
+02,ATIVA,C,Indústrias de transformação,31,6075,6065
+02,ATIVA,C,Indústrias de transformação,32,6278,6262
+02,ATIVA,C,Indústrias de transformação,33,10348,10329
+02,ATIVA,D,Eletricidade e gás,35,1318,844
+02,ATIVA,E,"Água, esgoto, atividades de gestão de resíduos e descontaminação",36,618,299
+02,ATIVA,E,"Água, esgoto, atividades de gestão de resíduos e descontaminação",37,264,255
+02,ATIVA,E,"Água, esgoto, atividades de gestão de resíduos e descontaminação",38,2255,2230
+02,ATIVA,E,"Água, esgoto, atividades de gestão de resíduos e descontaminação",39,11,11
+02,ATIVA,F,Construção,41,20367,19151
+02,ATIVA,F,Construção,42,2915,2785
+02,ATIVA,F,Construção,43,54137,54055
+02,ATIVA,G,Comércio; reparação de veículos automotores e motocicletas,45,50004,49596
+02,ATIVA,G,Comércio; reparação de veículos automotores e motocicletas,46,34125,33161
+02,ATIVA,G,Comércio; reparação de veículos automotores e motocicletas,47,237050,231278
+02,ATIVA,H,"Transporte, armazenagem e correio",49,46665,45774
+02,ATIVA,H,"Transporte, armazenagem e correio",50,539,512
+02,ATIVA,H,"Transporte, armazenagem e correio",51,161,93
+02,ATIVA,H,"Transporte, armazenagem e correio",52,7242,6935
+02,ATIVA,H,"Transporte, armazenagem e correio",53,8216,7483
+02,ATIVA,I,Alojamento e alimentação,55,4915,4864
+02,ATIVA,I,Alojamento e alimentação,56,62182,61297
+02,ATIVA,J,Informação e comunicação,58,5872,5851
+02,ATIVA,J,Informação e comunicação,59,4742,4704
+02,ATIVA,J,Informação e comunicação,60,803,784
+02,ATIVA,J,Informação e comunicação,61,3100,2758
+02,ATIVA,J,Informação e comunicação,62,9896,9863
+02,ATIVA,J,Informação e comunicação,63,3342,3193
+02,ATIVA,K,"Atividades financeiras, de seguros e serviços relacionados",64,17027,14715
+02,ATIVA,K,"Atividades financeiras, de seguros e serviços relacionados",65,411,301
+02,ATIVA,K,"Atividades financeiras, de seguros e serviços relacionados",66,7687,7515
+02,ATIVA,L,Atividades imobiliárias,68,18353,18290
+02,ATIVA,M,"Atividades profissionais, científicas e técnicas",69,17718,17645
+02,ATIVA,M,"Atividades profissionais, científicas e técnicas",70,7188,7152
+02,ATIVA,M,"Atividades profissionais, científicas e técnicas",71,10656,10615
+02,ATIVA,M,"Atividades profissionais, científicas e técnicas",72,376,357
+02,ATIVA,M,"Atividades profissionais, científicas e técnicas",73,22111,22091
+02,ATIVA,M,"Atividades profissionais, científicas e técnicas",74,10496,10407
+02,ATIVA,M,"Atividades profissionais, científicas e técnicas",75,1369,1365
+02,ATIVA,N,Atividades administrativas e serviços complementares,77,8525,8379
+02,ATIVA,N,Atividades administrativas e serviços complementares,78,739,725
+02,ATIVA,N,Atividades administrativas e serviços complementares,79,4801,4760
+02,ATIVA,N,Atividades administrativas e serviços complementares,80,1524,1484
+02,ATIVA,N,Atividades administrativas e serviços complementares,81,34767,34745
+02,ATIVA,N,Atividades administrativas e serviços complementares,82,44662,44319
+02,ATIVA,O,"Administração pública, defesa e seguridade social",84,5604,4890
+02,ATIVA,P,Educação,85,36888,35932
+02,ATIVA,Q,Saúde humana e serviços sociais,86,32883,32133
+02,ATIVA,Q,Saúde humana e serviços sociais,87,4899,4857
+02,ATIVA,Q,Saúde humana e serviços sociais,88,2067,1914
+02,ATIVA,R,"Artes, cultura, esporte e recreação",90,6448,6446
+02,ATIVA,R,"Artes, cultura, esporte e recreação",91,163,159
+02,ATIVA,R,"Artes, cultura, esporte e recreação",92,43,42
+02,ATIVA,R,"Artes, cultura, esporte e recreação",93,8592,8494
+02,ATIVA,S,Outras atividades de serviços,94,62551,57078
+02,ATIVA,S,Outras atividades de serviços,95,14090,14066
+02,ATIVA,S,Outras atividades de serviços,96,59093,58948
+02,ATIVA,T,Serviços domésticos,97,7349,7349
+02,ATIVA,U,Organismos internacionais e outras instituições extraterritoriais,99,182,182
+03,SUSPENSA,A,"Agricultura, pecuária, produção florestal, pesca e aquicultura",01,87,84
+03,SUSPENSA,A,"Agricultura, pecuária, produção florestal, pesca e aquicultura",02,25,25
+03,SUSPENSA,A,"Agricultura, pecuária, produção florestal, pesca e aquicultura",03,23,23
+03,SUSPENSA,B,Indústrias extrativas,06,4,4
+03,SUSPENSA,B,Indústrias extrativas,07,11,11
+03,SUSPENSA,B,Indústrias extrativas,08,40,40
+03,SUSPENSA,B,Indústrias extrativas,09,5,5
+03,SUSPENSA,C,Indústrias de transformação,10,220,217
+03,SUSPENSA,C,Indústrias de transformação,11,18,17
+03,SUSPENSA,C,Indústrias de transformação,12,2,2
+03,SUSPENSA,C,Indústrias de transformação,13,63,63
+03,SUSPENSA,C,Indústrias de transformação,14,242,239
+03,SUSPENSA,C,Indústrias de transformação,15,324,324
+03,SUSPENSA,C,Indústrias de transformação,16,56,56
+03,SUSPENSA,C,Indústrias de transformação,17,19,18
+03,SUSPENSA,C,Indústrias de transformação,18,49,49
+03,SUSPENSA,C,Indústrias de transformação,19,8,8
+03,SUSPENSA,C,Indústrias de transformação,20,43,43
+03,SUSPENSA,C,Indústrias de transformação,21,8,8
+03,SUSPENSA,C,Indústrias de transformação,22,45,44
+03,SUSPENSA,C,Indústrias de transformação,23,107,107
+03,SUSPENSA,C,Indústrias de transformação,24,14,14
+03,SUSPENSA,C,Indústrias de transformação,25,105,104
+03,SUSPENSA,C,Indústrias de transformação,26,37,37
+03,SUSPENSA,C,Indústrias de transformação,27,21,21
+03,SUSPENSA,C,Indústrias de transformação,28,103,103
+03,SUSPENSA,C,Indústrias de transformação,29,24,24
+03,SUSPENSA,C,Indústrias de transformação,30,11,11
+03,SUSPENSA,C,Indústrias de transformação,31,80,80
+03,SUSPENSA,C,Indústrias de transformação,32,41,41
+03,SUSPENSA,C,Indústrias de transformação,33,60,60
+03,SUSPENSA,D,Eletricidade e gás,35,12,12
+03,SUSPENSA,E,"Água, esgoto, atividades de gestão de resíduos e descontaminação",36,3,3
+03,SUSPENSA,E,"Água, esgoto, atividades de gestão de resíduos e descontaminação",37,4,4
+03,SUSPENSA,E,"Água, esgoto, atividades de gestão de resíduos e descontaminação",38,25,25
+03,SUSPENSA,F,Construção,41,474,458
+03,SUSPENSA,F,Construção,42,76,76
+03,SUSPENSA,F,Construção,43,265,265
+03,SUSPENSA,G,Comércio; reparação de veículos automotores e motocicletas,45,670,667
+03,SUSPENSA,G,Comércio; reparação de veículos automotores e motocicletas,46,1025,1013
+03,SUSPENSA,G,Comércio; reparação de veículos automotores e motocicletas,47,6168,6097
+03,SUSPENSA,H,"Transporte, armazenagem e correio",49,490,479
+03,SUSPENSA,H,"Transporte, armazenagem e correio",50,11,11
+03,SUSPENSA,H,"Transporte, armazenagem e correio",51,11,11
+03,SUSPENSA,H,"Transporte, armazenagem e correio",52,123,120
+03,SUSPENSA,H,"Transporte, armazenagem e correio",53,24,24
+03,SUSPENSA,I,Alojamento e alimentação,55,101,100
+03,SUSPENSA,I,Alojamento e alimentação,56,1241,1235
+03,SUSPENSA,J,Informação e comunicação,58,36,36
+03,SUSPENSA,J,Informação e comunicação,59,34,34
+03,SUSPENSA,J,Informação e comunicação,60,15,14
+03,SUSPENSA,J,Informação e comunicação,61,41,39
+03,SUSPENSA,J,Informação e comunicação,62,193,193
+03,SUSPENSA,J,Informação e comunicação,63,79,79
+03,SUSPENSA,K,"Atividades financeiras, de seguros e serviços relacionados",64,3199,3196
+03,SUSPENSA,K,"Atividades financeiras, de seguros e serviços relacionados",65,21,20
+03,SUSPENSA,K,"Atividades financeiras, de seguros e serviços relacionados",66,2468,2466
+03,SUSPENSA,L,Atividades imobiliárias,68,195,195
+03,SUSPENSA,M,"Atividades profissionais, científicas e técnicas",69,303,303
+03,SUSPENSA,M,"Atividades profissionais, científicas e técnicas",70,160,152
+03,SUSPENSA,M,"Atividades profissionais, científicas e técnicas",71,210,209
+03,SUSPENSA,M,"Atividades profissionais, científicas e técnicas",72,11,10
+03,SUSPENSA,M,"Atividades profissionais, científicas e técnicas",73,197,196
+03,SUSPENSA,M,"Atividades profissionais, científicas e técnicas",74,158,156
+03,SUSPENSA,M,"Atividades profissionais, científicas e técnicas",75,13,13
+03,SUSPENSA,N,Atividades administrativas e serviços complementares,77,157,156
+03,SUSPENSA,N,Atividades administrativas e serviços complementares,78,54,52
+03,SUSPENSA,N,Atividades administrativas e serviços complementares,79,92,86
+03,SUSPENSA,N,Atividades administrativas e serviços complementares,80,31,31
+03,SUSPENSA,N,Atividades administrativas e serviços complementares,81,141,140
+03,SUSPENSA,N,Atividades administrativas e serviços complementares,82,629,628
+03,SUSPENSA,O,"Administração pública, defesa e seguridade social",84,101,57
+03,SUSPENSA,P,Educação,85,285,274
+03,SUSPENSA,Q,Saúde humana e serviços sociais,86,462,455
+03,SUSPENSA,Q,Saúde humana e serviços sociais,87,37,35
+03,SUSPENSA,Q,Saúde humana e serviços sociais,88,1266,1264
+03,SUSPENSA,R,"Artes, cultura, esporte e recreação",90,53,52
+03,SUSPENSA,R,"Artes, cultura, esporte e recreação",91,3,3
+03,SUSPENSA,R,"Artes, cultura, esporte e recreação",92,10,10
+03,SUSPENSA,R,"Artes, cultura, esporte e recreação",93,126,123
+03,SUSPENSA,S,Outras atividades de serviços,94,621,563
+03,SUSPENSA,S,Outras atividades de serviços,95,148,148
+03,SUSPENSA,S,Outras atividades de serviços,96,216,206
+03,SUSPENSA,T,Serviços domésticos,97,4,4
+03,SUSPENSA,U,Organismos internacionais e outras instituições extraterritoriais,99,9,9
+04,INAPTA,A,"Agricultura, pecuária, produção florestal, pesca e aquicultura",01,3429,3371
+04,INAPTA,A,"Agricultura, pecuária, produção florestal, pesca e aquicultura",02,831,822
+04,INAPTA,A,"Agricultura, pecuária, produção florestal, pesca e aquicultura",03,615,614
+04,INAPTA,B,Indústrias extrativas,05,13,13
+04,INAPTA,B,Indústrias extrativas,06,9,9
+04,INAPTA,B,Indústrias extrativas,07,170,167
+04,INAPTA,B,Indústrias extrativas,08,930,921
+04,INAPTA,B,Indústrias extrativas,09,45,45
+04,INAPTA,C,Indústrias de transformação,10,13147,13078
+04,INAPTA,C,Indústrias de transformação,11,301,300
+04,INAPTA,C,Indústrias de transformação,12,32,29
+04,INAPTA,C,Indústrias de transformação,13,2789,2784
+04,INAPTA,C,Indústrias de transformação,14,14956,14914
+04,INAPTA,C,Indústrias de transformação,15,2953,2951
+04,INAPTA,C,Indústrias de transformação,16,3440,3425
+04,INAPTA,C,Indústrias de transformação,17,822,820
+04,INAPTA,C,Indústrias de transformação,18,3065,3063
+04,INAPTA,C,Indústrias de transformação,19,49,49
+04,INAPTA,C,Indústrias de transformação,20,1328,1318
+04,INAPTA,C,Indústrias de transformação,21,63,62
+04,INAPTA,C,Indústrias de transformação,22,1496,1491
+04,INAPTA,C,Indústrias de transformação,23,3923,3913
+04,INAPTA,C,Indústrias de transformação,24,391,391
+04,INAPTA,C,Indústrias de transformação,25,8708,8701
+04,INAPTA,C,Indústrias de transformação,26,263,257
+04,INAPTA,C,Indústrias de transformação,27,339,337
+04,INAPTA,C,Indústrias de transformação,28,901,897
+04,INAPTA,C,Indústrias de transformação,29,513,511
+04,INAPTA,C,Indústrias de transformação,30,153,152
+04,INAPTA,C,Indústrias de transformação,31,5049,5046
+04,INAPTA,C,Indústrias de transformação,32,4476,4472
+04,INAPTA,C,Indústrias de transformação,33,5914,5912
+04,INAPTA,D,Eletricidade e gás,35,91,91
+04,INAPTA,E,"Água, esgoto, atividades de gestão de resíduos e descontaminação",36,133,133
+04,INAPTA,E,"Água, esgoto, atividades de gestão de resíduos e descontaminação",37,175,175
+04,INAPTA,E,"Água, esgoto, atividades de gestão de resíduos e descontaminação",38,1946,1942
+04,INAPTA,E,"Água, esgoto, atividades de gestão de resíduos e descontaminação",39,9,9
+04,INAPTA,F,Construção,41,11389,11293
+04,INAPTA,F,Construção,42,2630,2601
+04,INAPTA,F,Construção,43,50846,50826
+04,INAPTA,G,Comércio; reparação de veículos automotores e motocicletas,45,39240,39133
+04,INAPTA,G,Comércio; reparação de veículos automotores e motocicletas,46,32004,31765
+04,INAPTA,G,Comércio; reparação de veículos automotores e motocicletas,47,264921,263161
+04,INAPTA,H,"Transporte, armazenagem e correio",49,34197,33915
+04,INAPTA,H,"Transporte, armazenagem e correio",50,393,393
+04,INAPTA,H,"Transporte, armazenagem e correio",51,97,75
+04,INAPTA,H,"Transporte, armazenagem e correio",52,4726,4615
+04,INAPTA,H,"Transporte, armazenagem e correio",53,8364,8362
+04,INAPTA,I,Alojamento e alimentação,55,2728,2718
+04,INAPTA,I,Alojamento e alimentação,56,86945,86748
+04,INAPTA,J,Informação e comunicação,58,3111,3099
+04,INAPTA,J,Informação e comunicação,59,1844,1838
+04,INAPTA,J,Informação e comunicação,60,555,553
+04,INAPTA,J,Informação e comunicação,61,1448,1439
+04,INAPTA,J,Informação e comunicação,62,4510,4487
+04,INAPTA,J,Informação e comunicação,63,1849,1846
+04,INAPTA,K,"Atividades financeiras, de seguros e serviços relacionados",64,1655,1639
+04,INAPTA,K,"Atividades financeiras, de seguros e serviços relacionados",65,272,258
+04,INAPTA,K,"Atividades financeiras, de seguros e serviços relacionados",66,2585,2551
+04,INAPTA,L,Atividades imobiliárias,68,3739,3716
+04,INAPTA,M,"Atividades profissionais, científicas e técnicas",69,3101,3096
+04,INAPTA,M,"Atividades profissionais, científicas e técnicas",70,3024,3014
+04,INAPTA,M,"Atividades profissionais, científicas e técnicas",71,3428,3406
+04,INAPTA,M,"Atividades profissionais, científicas e técnicas",72,129,129
+04,INAPTA,M,"Atividades profissionais, científicas e técnicas",73,17926,17901
+04,INAPTA,M,"Atividades profissionais, científicas e técnicas",74,6189,6152
+04,INAPTA,M,"Atividades profissionais, científicas e técnicas",75,223,223
+04,INAPTA,N,Atividades administrativas e serviços complementares,77,5775,5751
+04,INAPTA,N,Atividades administrativas e serviços complementares,78,1725,1694
+04,INAPTA,N,Atividades administrativas e serviços complementares,79,3401,3368
+04,INAPTA,N,Atividades administrativas e serviços complementares,80,1789,1770
+04,INAPTA,N,Atividades administrativas e serviços complementares,81,6726,6713
+04,INAPTA,N,Atividades administrativas e serviços complementares,82,24899,24741
+04,INAPTA,O,"Administração pública, defesa e seguridade social",84,210,210
+04,INAPTA,P,Educação,85,15999,15910
+04,INAPTA,Q,Saúde humana e serviços sociais,86,5991,5924
+04,INAPTA,Q,Saúde humana e serviços sociais,87,4888,4875
+04,INAPTA,Q,Saúde humana e serviços sociais,88,7854,7796
+04,INAPTA,R,"Artes, cultura, esporte e recreação",90,3535,3533
+04,INAPTA,R,"Artes, cultura, esporte e recreação",91,179,179
+04,INAPTA,R,"Artes, cultura, esporte e recreação",92,266,259
+04,INAPTA,R,"Artes, cultura, esporte e recreação",93,6714,6689
+04,INAPTA,S,Outras atividades de serviços,94,28580,28481
+04,INAPTA,S,Outras atividades de serviços,95,11609,11583
+04,INAPTA,S,Outras atividades de serviços,96,38646,38599
+04,INAPTA,T,Serviços domésticos,97,5228,5228
+04,INAPTA,U,Organismos internacionais e outras instituições extraterritoriais,99,18,18
+08,BAIXADA,A,"Agricultura, pecuária, produção florestal, pesca e aquicultura",01,26656,23651
+08,BAIXADA,A,"Agricultura, pecuária, produção florestal, pesca e aquicultura",02,2518,2126
+08,BAIXADA,A,"Agricultura, pecuária, produção florestal, pesca e aquicultura",03,1811,1802
+08,BAIXADA,B,Indústrias extrativas,05,39,39
+08,BAIXADA,B,Indústrias extrativas,06,62,56
+08,BAIXADA,B,Indústrias extrativas,07,537,446
+08,BAIXADA,B,Indústrias extrativas,08,2951,2825
+08,BAIXADA,B,Indústrias extrativas,09,101,92
+08,BAIXADA,C,Indústrias de transformação,10,35090,34497
+08,BAIXADA,C,Indústrias de transformação,11,1076,1018
+08,BAIXADA,C,Indústrias de transformação,12,163,100
+08,BAIXADA,C,Indústrias de transformação,13,9014,8967
+08,BAIXADA,C,Indústrias de transformação,14,44668,44509
+08,BAIXADA,C,Indústrias de transformação,15,7825,7767
+08,BAIXADA,C,Indústrias de transformação,16,8357,8313
+08,BAIXADA,C,Indústrias de transformação,17,2274,2233
+08,BAIXADA,C,Indústrias de transformação,18,7863,7836
+08,BAIXADA,C,Indústrias de transformação,19,168,152
+08,BAIXADA,C,Indústrias de transformação,20,3984,3743
+08,BAIXADA,C,Indústrias de transformação,21,251,202
+08,BAIXADA,C,Indústrias de transformação,22,3990,3906
+08,BAIXADA,C,Indústrias de transformação,23,10263,10154
+08,BAIXADA,C,Indústrias de transformação,24,933,862
+08,BAIXADA,C,Indústrias de transformação,25,19153,19109
+08,BAIXADA,C,Indústrias de transformação,26,751,721
+08,BAIXADA,C,Indústrias de transformação,27,931,880
+08,BAIXADA,C,Indústrias de transformação,28,2007,1955
+08,BAIXADA,C,Indústrias de transformação,29,1358,1320
+08,BAIXADA,C,Indústrias de transformação,30,382,374
+08,BAIXADA,C,Indústrias de transformação,31,11113,11066
+08,BAIXADA,C,Indústrias de transformação,32,13906,13888
+08,BAIXADA,C,Indústrias de transformação,33,13098,13079
+08,BAIXADA,D,Eletricidade e gás,35,819,463
+08,BAIXADA,E,"Água, esgoto, atividades de gestão de resíduos e descontaminação",36,313,273
+08,BAIXADA,E,"Água, esgoto, atividades de gestão de resíduos e descontaminação",37,289,288
+08,BAIXADA,E,"Água, esgoto, atividades de gestão de resíduos e descontaminação",38,3539,3517
+08,BAIXADA,E,"Água, esgoto, atividades de gestão de resíduos e descontaminação",39,11,11
+08,BAIXADA,F,Construção,41,19184,18747
+08,BAIXADA,F,Construção,42,4153,3752
+08,BAIXADA,F,Construção,43,89390,89281
+08,BAIXADA,G,Comércio; reparação de veículos automotores e motocicletas,45,87744,87063
+08,BAIXADA,G,Comércio; reparação de veículos automotores e motocicletas,46,81079,78952
+08,BAIXADA,G,Comércio; reparação de veículos automotores e motocicletas,47,794132,784070
+08,BAIXADA,H,"Transporte, armazenagem e correio",49,72953,71633
+08,BAIXADA,H,"Transporte, armazenagem e correio",50,853,835
+08,BAIXADA,H,"Transporte, armazenagem e correio",51,306,210
+08,BAIXADA,H,"Transporte, armazenagem e correio",52,16885,15767
+08,BAIXADA,H,"Transporte, armazenagem e correio",53,16784,16568
+08,BAIXADA,I,Alojamento e alimentação,55,7278,7214
+08,BAIXADA,I,Alojamento e alimentação,56,236371,234448
+08,BAIXADA,J,Informação e comunicação,58,14133,14039
+08,BAIXADA,J,Informação e comunicação,59,6050,5991
+08,BAIXADA,J,Informação e comunicação,60,1062,1036
+08,BAIXADA,J,Informação e comunicação,61,5370,4451
+08,BAIXADA,J,Informação e comunicação,62,14738,14535
+08,BAIXADA,J,Informação e comunicação,63,6237,5932
+08,BAIXADA,K,"Atividades financeiras, de seguros e serviços relacionados",64,14658,10934
+08,BAIXADA,K,"Atividades financeiras, de seguros e serviços relacionados",65,1792,993
+08,BAIXADA,K,"Atividades financeiras, de seguros e serviços relacionados",66,7508,6647
+08,BAIXADA,L,Atividades imobiliárias,68,9554,9463
+08,BAIXADA,M,"Atividades profissionais, científicas e técnicas",69,9841,9623
+08,BAIXADA,M,"Atividades profissionais, científicas e técnicas",70,8091,8007
+08,BAIXADA,M,"Atividades profissionais, científicas e técnicas",71,10270,10131
+08,BAIXADA,M,"Atividades profissionais, científicas e técnicas",72,335,325
+08,BAIXADA,M,"Atividades profissionais, científicas e técnicas",73,53263,53220
+08,BAIXADA,M,"Atividades profissionais, científicas e técnicas",74,22618,22169
+08,BAIXADA,M,"Atividades profissionais, científicas e técnicas",75,837,836
+08,BAIXADA,N,Atividades administrativas e serviços complementares,77,15714,15375
+08,BAIXADA,N,Atividades administrativas e serviços complementares,78,6446,6324
+08,BAIXADA,N,Atividades administrativas e serviços complementares,79,9014,8801
+08,BAIXADA,N,Atividades administrativas e serviços complementares,80,2475,2424
+08,BAIXADA,N,Atividades administrativas e serviços complementares,81,15572,15416
+08,BAIXADA,N,Atividades administrativas e serviços complementares,82,75015,73838
+08,BAIXADA,O,"Administração pública, defesa e seguridade social",84,1337,951
+08,BAIXADA,P,Educação,85,57100,56358
+08,BAIXADA,Q,Saúde humana e serviços sociais,86,23427,22630
+08,BAIXADA,Q,Saúde humana e serviços sociais,87,11525,11487
+08,BAIXADA,Q,Saúde humana e serviços sociais,88,170921,169732
+08,BAIXADA,R,"Artes, cultura, esporte e recreação",90,8567,8564
+08,BAIXADA,R,"Artes, cultura, esporte e recreação",91,441,434
+08,BAIXADA,R,"Artes, cultura, esporte e recreação",92,1467,1417
+08,BAIXADA,R,"Artes, cultura, esporte e recreação",93,15366,15273
+08,BAIXADA,S,Outras atividades de serviços,94,294964,293609
+08,BAIXADA,S,Outras atividades de serviços,95,39460,39341
+08,BAIXADA,S,Outras atividades de serviços,96,89930,89743
+08,BAIXADA,T,Serviços domésticos,97,10130,10130
+08,BAIXADA,U,Organismos internacionais e outras instituições extraterritoriais,99,39,39

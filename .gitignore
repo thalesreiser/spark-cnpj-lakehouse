@@ -23,6 +23,8 @@ credentials*
 # Data (never commit raw data; only samples in tests/fixtures)
 data/
 !tests/fixtures/**
+# aggregated gold roll-ups read by notebooks/02 (counts only, no rows: RST-01)
+!notebooks/data/
 
 # IDE / OS
 .vscode/
