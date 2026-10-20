@@ -85,3 +85,11 @@ test:
 TABLE ?= empresas
 time-travel:  ## RF-06 proof: version N-1 reproduces the recorded result (aggregates only)
 	$(SPARK_RUN) python -m cnpj_lakehouse.time_travel --table $(TABLE) --out build/time-travel $(TT_ARGS)
+
+.PHONY: benchmark
+# RF-08 / RNF-01 (task 6.1): runs the main job (silver MERGE + gold) N times with Spark event logs
+# and records the median time, shuffle, spill and files in build/benchmark (docs/benchmark.md).
+# Needs `make bronze` and scripts/silver_next_month.py first; BENCH_ARGS e.g.
+# "--next 2026-10 --merge-tables empresas --runs 3" (the Benchmark workflow runs it end to end).
+benchmark:  ## RF-08 baseline: main job N times, median metrics and event logs in build/benchmark
+	$(SPARK_RUN) python scripts/benchmark.py run --competencia $(COMPETENCIA) $(BENCH_ARGS)
