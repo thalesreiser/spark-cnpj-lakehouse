@@ -221,14 +221,16 @@ def test_render_markdown_sheet() -> None:
     result = {
         "environment": {"CPUs (host)": 2, "Spark properties": {"spark.executor.memory": "1g"}},
         "summary": summary,
+        "setup": {"silver_initial": {"wall_s": 12.0}},
         "files": {"silver/empresas": file_stats(4, 4096, {})},
         "top_stages": {"silver_merge": app.top_stages(1)},
     }
     md = render_markdown(result)
     assert md.startswith("# Benchmark baseline (task 6.1)")
     assert "Main job: silver_merge + gold" in md
-    assert "| Metric | main job | silver_initial | silver_merge | gold |" in md
-    assert "| Wall time | 70.0 s | 100.0 s | 50.0 s | 20.0 s |" in md
+    header = "| Metric | main job | silver_initial | silver_merge | gold | silver_initial (setup, 1"
+    assert header in md
+    assert "| Wall time | 70.0 s | 100.0 s | 50.0 s | 20.0 s | 12.0 s |" in md
     assert "- `spark.executor.memory` = `1g`" in md
     assert "| silver/empresas | 4 | 4.0 KiB | 1.0 KiB | 1 | 4-4 |" in md
     assert "| silver_merge | 0: save at Delta | 0.6 s | 5 |" in md

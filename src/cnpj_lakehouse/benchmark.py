@@ -335,7 +335,8 @@ def render_markdown(result: Mapping[str, Any]) -> str:
     for name, props in env.items():
         if isinstance(props, Mapping):
             lines += ["", f"**{name}**", ""] + [f"- `{k}` = `{v}`" for k, v in props.items()]
-    columns = ["main job", *summary["steps"]]
+    setup = result.get("setup", {})
+    columns = ["main job", *summary["steps"], *(f"{name} (setup, 1 run)" for name in setup)]
     lines += [
         "",
         "## Median of the runs",
@@ -343,7 +344,7 @@ def render_markdown(result: Mapping[str, Any]) -> str:
         "| Metric | " + " | ".join(columns) + " |",
         "|---|" + "---:|" * len(columns),
     ]
-    tables = [summary["main"], *summary["steps"].values()]
+    tables = [summary["main"], *summary["steps"].values(), *setup.values()]
     for key, label, unit in METRICS:
         cells = [_format(float(t.get(key, 0)), unit) for t in tables]
         lines.append(f"| {label} | " + " | ".join(cells) + " |")

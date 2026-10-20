@@ -2,27 +2,29 @@
 
 Run inside the ``spark-client`` container (``make benchmark``, ``Benchmark`` workflow) after
 ``make bronze`` for ``--competencia`` and ``scripts/silver_next_month.py`` for ``--next`` (the
-synthetic next month that the silver MERGE consumes). Each run ``i`` writes to its own lakehouse
-prefix ``s3a://<bucket>/benchmark/run-<i>/`` (silver and gold), so every run starts from the
-same state without deleting anything, and executes three Spark applications with event logs
-enabled (``SPARK_EVENT_LOG_DIR``):
+synthetic next month that the silver MERGE consumes). Every step is its own Spark application
+with event logs enabled (``SPARK_EVENT_LOG_DIR``); pipeline code is unchanged.
 
-1. ``silver_initial``: ``cnpj_lakehouse.silver`` for ``--competencia`` (creates the tables);
-2. ``silver_merge``: ``cnpj_lakehouse.silver`` for ``--next`` on ``--merge-tables`` (MERGE);
-3. ``gold``: ``cnpj_lakehouse.gold`` from that silver.
+* **setup** (once): ``cnpj_lakehouse.silver`` for ``--competencia`` creates the silver tables
+  under ``s3a://<bucket>/benchmark/silver`` (version 0); measured and reported, not repeated.
+* **main job** (``--runs`` times), the monthly incremental load:
 
-The **main job** is ``silver_merge + gold`` (the monthly incremental load); step 1 is the setup
-and is reported separately. Pipeline code is unchanged: only the session gets event logs.
+  1. ``silver_merge``: ``cnpj_lakehouse.silver`` for ``--next`` on ``--merge-tables`` (MERGE);
+  2. ``gold``: ``cnpj_lakehouse.gold`` from that silver into ``benchmark/run-<i>/gold``.
 
-After the runs, ``DESCRIBE DETAIL`` gives the files and size of every silver/gold table of the
-median run and of the bronze tables, with live files per partition value. Output (metadata
-only, never rows, RST-01): ``<out>/benchmark.json``, ``<out>/benchmark.md``,
-``<out>/eventlogs/`` and the run summaries in ``<out>/run-<i>/``.
+  Before runs 2..N the merged tables are restored to version 0 (Delta ``RESTORE``) and the files
+  of the undone MERGE are vacuumed, so every run merges the same month into the same table
+  without reloading it (the runner has 14 GB of disk).
+
+After the runs, ``DESCRIBE DETAIL`` gives the files and size of the bronze tables, of silver
+after the MERGE and of the gold tables of the median run, with live files per partition value.
+Output (metadata only, never rows, RST-01): ``<out>/benchmark.json``, ``<out>/benchmark.md``,
+``<out>/eventlogs/`` and the run summaries in ``<out>/setup`` and ``<out>/run-<i>/``.
 
 ``ui`` rebuilds the Spark UI of the median run from the event logs with a Spark History Server
 and saves its REST API JSON and the server-rendered jobs/stages/SQL pages to ``<out>/spark-ui``.
 
-    python scripts/benchmark.py run --competencia 2026-09 --next 2026-10 \\
+    python scripts/benchmark.py run --competencia 2026-09 --next 2026-10 \
         --merge-tables empresas estabelecimentos --runs 3 --out build/benchmark
     python scripts/benchmark.py ui --out build/benchmark
 """
@@ -73,45 +75,33 @@ def run_step(cmd: list[str], env: dict[str, str], logs: Path) -> tuple[float, Ap
         return wall, parse_event_log(fh), new[0]
 
 
-def _commands(args: argparse.Namespace, root: str, run_dir: Path) -> dict[str, list[str]]:
-    py = [sys.executable, "-m"]
-    silver, gold = f"{root}/silver", f"{root}/gold"
-    return {
-        "silver_initial": [
-            *py,
-            "cnpj_lakehouse.silver",
-            "--competencia",
-            args.competencia,
-            "--output",
-            silver,
-            "--summary",
-            str(run_dir / "silver-initial.json"),
-        ],
-        "silver_merge": [
-            *py,
-            "cnpj_lakehouse.silver",
-            "--competencia",
-            args.next,
-            "--tables",
-            *args.merge_tables,
-            "--output",
-            silver,
-            "--summary",
-            str(run_dir / "silver-merge.json"),
-        ],
-        "gold": [
-            *py,
-            "cnpj_lakehouse.gold",
-            "--competencia",
-            args.next,
-            "--silver",
-            silver,
-            "--output",
-            gold,
-            "--summary",
-            str(run_dir / "gold.json"),
-        ],
-    }
+def _silver(args: argparse.Namespace, competencia: str, silver: str, summary: Path) -> list[str]:
+    cmd = [sys.executable, "-m", "cnpj_lakehouse.silver", "--competencia", competencia]
+    if competencia == args.next:
+        cmd += ["--tables", *args.merge_tables]
+    return [*cmd, "--output", silver, "--summary", str(summary)]
+
+
+def _gold(args: argparse.Namespace, silver: str, gold: str, summary: Path) -> list[str]:
+    return [
+        *(sys.executable, "-m", "cnpj_lakehouse.gold", "--competencia", args.next),
+        *("--silver", silver, "--output", gold, "--summary", str(summary)),
+    ]
+
+
+def reset_silver(cfg: LakehouseConfig, paths: list[str]) -> None:
+    """Restores the merged silver tables to version 0 and vacuums the undone MERGE files."""
+    from delta.tables import DeltaTable
+
+    spark = get_spark("benchmark-reset", cfg)
+    try:
+        spark.conf.set("spark.databricks.delta.retentionDurationCheck.enabled", "false")
+        for path in paths:
+            table = DeltaTable.forPath(spark, path)
+            table.restoreToVersion(0)
+            table.vacuum(0)
+    finally:
+        spark.stop()
 
 
 def _environment(args: argparse.Namespace, properties: dict[str, str]) -> dict[str, Any]:
@@ -130,6 +120,9 @@ def _environment(args: argparse.Namespace, properties: dict[str, str]) -> dict[s
         "competencia": args.competencia,
         "next month (MERGE)": args.next,
         "MERGE tables": " ".join(args.merge_tables),
+        "bronze sample fraction (SPARK_SAMPLE_FRACTION)": os.environ.get(
+            "SPARK_SAMPLE_FRACTION", "1.0"
+        ),
     }
     for item in args.info:
         key, _, value = item.partition("=")
@@ -177,41 +170,59 @@ def cmd_run(args: argparse.Namespace) -> int:
     logs = out / "eventlogs"
     logs.mkdir(parents=True, exist_ok=True)
     env = {**os.environ, "SPARK_EVENT_LOG_DIR": logs.as_uri()}
+    silver = cfg.path("benchmark", "silver")
+    setup_dir = out / "setup"
+    setup_dir.mkdir(parents=True, exist_ok=True)
+    wall, app, log_file = run_step(
+        _silver(args, args.competencia, silver, setup_dir / "silver-initial.json"), env, logs
+    )
+    setup = {"wall_s": wall, **app.totals()}
+    setup_app = {**app.to_dict(), "event_log": log_file.name}
+    print(f"[benchmark] setup silver_initial: {json.dumps(setup)}", flush=True)
+
     runs: list[dict[str, dict[str, float]]] = []
     details: list[dict[str, Any]] = []
+    merged = [f"{silver}/{t}" for t in args.merge_tables]
     for i in range(1, args.runs + 1):
+        if i > 1:
+            reset_silver(cfg, merged)
         run_dir = out / f"run-{i}"
         run_dir.mkdir(parents=True, exist_ok=True)
-        root = cfg.path("benchmark", f"run-{i}")
+        gold = cfg.path("benchmark", f"run-{i}", "gold")
+        commands = {
+            "silver_merge": _silver(args, args.next, silver, run_dir / "silver-merge.json"),
+            "gold": _gold(args, silver, gold, run_dir / "gold.json"),
+        }
         metrics: dict[str, dict[str, float]] = {}
         apps: dict[str, Any] = {}
-        for step, cmd in _commands(args, root, run_dir).items():
+        for step, cmd in commands.items():
             wall, app, log_file = run_step(cmd, env, logs)
             metrics[step] = {"wall_s": wall, **app.totals()}
             apps[step] = {**app.to_dict(), "event_log": log_file.name}
             print(f"[benchmark] run {i} {step}: {json.dumps(metrics[step])}", flush=True)
         runs.append(metrics)
-        details.append({"root": root, "apps": apps})
+        details.append({"apps": apps})
 
     summary = summarize(runs, MAIN_STEPS)
     best = details[summary["median_run"]]
+    initial = json.loads((setup_dir / "silver-initial.json").read_text(encoding="utf-8"))
+    silver_tables = [t["table"] for t in initial["tables"]]
     median_dir = out / f"run-{summary['median_run'] + 1}"
-    silver_tables = [
-        t["table"]
-        for t in json.loads((median_dir / "silver-initial.json").read_text(encoding="utf-8"))[
-            "tables"
-        ]
-    ]
     gold_paths = json.loads((median_dir / "gold.json").read_text(encoding="utf-8"))["paths"]
     tables = {f"bronze/{t}": cfg.path(BRONZE_LAYER, t) for t in silver_tables}
-    tables |= {f"silver/{t}": f"{best['root']}/silver/{t}" for t in silver_tables}
+    tables |= {f"silver/{t}": f"{silver}/{t}" for t in silver_tables}
     tables |= {f"gold/{t}": p for t, p in gold_paths.items()}
     properties = best["apps"][MAIN_STEPS[0]]["properties"]
     result = {
         "environment": _environment(args, properties),
         "summary": summary,
+        "setup": {"silver_initial": setup},
         "files": _files(cfg, tables),
-        "top_stages": {step: app["top_stages"] for step, app in best["apps"].items()},
+        "top_stages": {
+            "silver_initial (setup)": setup_app["top_stages"],
+            **{step: app["top_stages"] for step, app in best["apps"].items()},
+        },
+        "setup_app": setup_app,
         "runs": details,
     }
     (out / "benchmark.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
