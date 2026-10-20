@@ -15,6 +15,7 @@ Environment variables (defaults meant for local development, never for productio
 | `SPARK_EXECUTOR_MEMORY`       | `1g`                    | memory of each executor               |
 | `SPARK_DRIVER_HOST`           | (unset)                 | driver host/IP as seen by the cluster |
 | `LAKEHOUSE_JARS_PREINSTALLED` | `false`                 | `true` inside the project Spark image |
+| `SPARK_EVENT_LOG_DIR`         | (unset)                 | enables Spark event logs (benchmark)  |
 """
 
 from __future__ import annotations
@@ -52,6 +53,9 @@ class LakehouseConfig:
     executor_memory: str = "1g"
     driver_host: str | None = None
     jars_preinstalled: bool = False
+    # Directory (URI, e.g. ``file:/opt/app/build/benchmark/eventlogs``) for Spark event logs; set
+    # only by the benchmark (task 6.1), so the Spark UI can be rebuilt by a History Server.
+    event_log_dir: str | None = None
 
     @property
     def ssl(self) -> bool:
@@ -74,6 +78,7 @@ class LakehouseConfig:
             executor_memory=read("SPARK_EXECUTOR_MEMORY", cls.executor_memory),
             driver_host=env.get("SPARK_DRIVER_HOST", "").strip() or None,
             jars_preinstalled=_as_bool(env.get("LAKEHOUSE_JARS_PREINSTALLED")),
+            event_log_dir=env.get("SPARK_EVENT_LOG_DIR", "").strip() or None,
         )
 
     def path(self, *parts: str) -> str:
@@ -105,6 +110,10 @@ def build_conf(cfg: LakehouseConfig) -> dict[str, str]:
     }
     if cfg.driver_host:
         conf["spark.driver.host"] = cfg.driver_host
+    if cfg.event_log_dir:
+        conf["spark.eventLog.enabled"] = "true"
+        conf["spark.eventLog.dir"] = cfg.event_log_dir
+        conf["spark.eventLog.compress"] = "false"
     if not cfg.jars_preinstalled:
         conf["spark.jars.packages"] = ",".join(SPARK_PACKAGES)
     return conf
