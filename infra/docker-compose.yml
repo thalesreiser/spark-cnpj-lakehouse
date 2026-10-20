@@ -6,7 +6,7 @@
 name: cnpj-lakehouse
 
 x-spark-image: &spark-image
-  image: cnpj-lakehouse/spark:3.5.3
+  image: cnpj-lakehouse/spark:3.5.8
   build:
     context: ..
     dockerfile: infra/spark/Dockerfile
