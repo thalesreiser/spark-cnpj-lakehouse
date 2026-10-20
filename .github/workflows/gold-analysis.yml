@@ -79,7 +79,7 @@ jobs:
           ls -l notebooks/02-business-questions.ipynb
       - name: Upload the notebook and the roll-ups (no raw data)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: gold-analysis-${{ env.COMPETENCIA }}
           path: |
