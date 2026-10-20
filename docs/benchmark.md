@@ -16,7 +16,7 @@ Baseline of the main job before any tuning (task 6.1). The tuning itself is task
 |---|---|
 | Runner | GitHub-hosted `ubuntu-latest` (private repository: 2 vCPU, 8 GB RAM, 14 GB SSD); exact image, CPU model and memory recorded by the workflow in the job summary and in `benchmark.json` |
 | Stack | Docker Compose of the project ([ADR 005](adr/005-docker-environment-images.md)): 1 Spark master, 1 worker (2 cores, 2 GB), driver in `spark-client`, MinIO (s3a) |
-| Versions | Spark 3.5.3, Delta Lake 3.2.1, Python 3.11, Java 17 (`cnpj_lakehouse/versions.py`) |
+| Versions | Spark 3.5.8, Delta Lake 3.2.1, Python 3.11, Java 17 (`cnpj_lakehouse/versions.py`) |
 | Key configs | `spark.executor.memory=1g`, `spark.sql.adaptive.enabled=true`, everything else at the Spark defaults (e.g. `spark.sql.shuffle.partitions=200`, `spark.sql.autoBroadcastJoinThreshold=10MB`); the properties actually set are read from the event log |
 
 ## Method
