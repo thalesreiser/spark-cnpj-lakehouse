@@ -177,6 +177,8 @@ The CI `bronze` job then runs `make silver` on the same 2026-09 subset and `scri
 
 `make quality` runs `python -m cnpj_lakehouse.quality` on the silver tables (the whole current state, ADR 011; `COMPETENCIA` labels the report): declarative rules per table check mandatory columns (nulls), coded columns against the documented domains (UF, registration status, company size...) and the silver lookup tables, identifier formats and business-key uniqueness. It writes `build/quality-<COMPETENCIA>/quality.md` and `quality.json` (counts only) and exits non-zero when any `error` rule fails; `warn` rules (e.g. invalid CNPJs, codes missing from a lookup) are reported only. The CI `bronze` job runs it last and appends the report to the job summary. The rules are listed in the [data dictionary](docs/data-dictionary.md#quality-rules).
 
+**Idempotency guarantee (RF-04).** Re-running `make silver` for a month that is already loaded leaves every silver table identical: the MERGE inserts and updates nothing, and the table fingerprint (`cnpj_lakehouse.fingerprint.table_fingerprint`: row count plus an order-independent SHA-256 of every column except the load metadata `_ingest_ts`/`_source_file`) is the same before and after. A new month changes only the keys it updates or inserts, re-running it is again a no-op, and loading an older month never overwrites a newer record. This is proven by `tests/test_silver_idempotency.py` and on real data by the CI `bronze` job, which prints both fingerprints of the re-run in its job summary.
+
 #### Time travel (RF-06)
 
 ```bash
