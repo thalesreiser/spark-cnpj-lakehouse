@@ -4,10 +4,6 @@ name: Benchmark
 # limited). Publishes metrics, Spark event logs and the Spark UI pages rebuilt by a History
 # Server as artifacts; metadata only, never rows (RST-01).
 on:
-  # TEMPORARY (removed before review): runs the workflow from the feature branch.
-  push:
-    branches: [feat/p2-6.1]
-    paths: [.github/workflows/benchmark.yml]
   workflow_dispatch:
     inputs:
       competencia:
