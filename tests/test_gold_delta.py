@@ -21,7 +21,7 @@ from delta.tables import DeltaTable
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 
-from cnpj_lakehouse import bronze, gold, silver
+from cnpj_lakehouse import bronze, gold, reconcile, silver
 from cnpj_lakehouse.gold import CNAE_UF_ANO, DISTRIBUICAO_PORTE, GOLD_TABLES, SITUACAO_SETOR
 from cnpj_lakehouse.silver import RULES, build_silver, merge_silver
 
@@ -183,3 +183,45 @@ def test_excluding_invalid_cnpjs_and_missing_inputs(
     ]
     with pytest.raises(ValueError, match="make silver"):
         gold.run(spark, MONTH, (tmp_path / "empty").as_posix(), (tmp_path / "g3").as_posix())
+
+
+def test_reconcile_gold_with_silver_end_to_end(
+    spark: SparkSession, silver_root: str, tmp_path: Path
+) -> None:
+    """Task 5.2: the Delta gold tables match an independent recomputation from silver."""
+    out = (tmp_path / "gold").as_posix()
+    gold.run(spark, MONTH, silver_root, out)
+    report = reconcile.run(spark, MONTH, silver_root, out)
+    assert report.passed and report.errors == () and report.skipped == {}
+    assert {c.table for c in report.comparisons} == set(GOLD_TABLES)
+    by_uf = next(
+        c
+        for c in report.comparisons
+        if (c.table, c.level, c.measure) == (CNAE_UF_ANO, "uf", "estabelecimentos")
+    )
+    assert {g.key: g.actual for g in by_uf.listed} == {
+        (None,): 1,
+        ("MG",): 1,
+        ("RJ",): 1,
+        ("SP",): 3,
+    }
+    # gold run with invalid CNPJs counted, reconciled as if they were excluded: mismatch
+    assert not reconcile.run(spark, MONTH, silver_root, out, include_invalid_cnpj=False).passed
+
+    # a broken gold table on Delta: one establishment less in SP
+    path = f"{out}/{CNAE_UF_ANO}"
+    table = spark.read.format("delta").load(path)
+    broken = table.withColumn(
+        "estabelecimentos",
+        F.when(F.col("uf") == "SP", F.col("estabelecimentos") - 1).otherwise(
+            F.col("estabelecimentos")
+        ),
+    ).localCheckpoint()
+    gold.write_gold(broken, path)
+    failed = reconcile.run(spark, MONTH, silver_root, out)
+    assert not failed.passed
+    assert {(c.table, c.level) for c in failed.comparisons if not c.passed} == {
+        (CNAE_UF_ANO, "total"),
+        (CNAE_UF_ANO, "uf"),
+        (CNAE_UF_ANO, "gold grain"),
+    }

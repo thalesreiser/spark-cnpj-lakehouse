@@ -269,7 +269,7 @@ Grain: one row per (`situacao_cadastral`, `cnae_divisao`); the section follows f
 | `estabelecimentos` | long | Establishments (additive) |
 | `empresas` | long | Distinct companies in the row (not additive) |
 
-**Run summary and sum checks.** `build/gold-<competencia>.json` / `.md` hold the row count of each gold table, the silver counts behind them (`empresas`, `estabelecimentos`, `invalid_cnpj`, `eligible`, `eligible_active`, `without_company`) and the checks: `estabelecimentos` of the two establishment tables = eligible silver establishments; `estabelecimentos_ativos` = eligible active ones; `gold_distribuicao_porte.empresas` = silver companies, `participacao` sums to 1, `estabelecimentos` = eligible minus `without_company`. Any failed check makes the run exit with code 1. No data rows are written (RST-01). The full silver x gold reconciliation is task 5.2.
+**Run summary and sum checks.** `build/gold-<competencia>.json` / `.md` hold the row count of each gold table, the silver counts behind them (`empresas`, `estabelecimentos`, `invalid_cnpj`, `eligible`, `eligible_active`, `without_company`) and the checks: `estabelecimentos` of the two establishment tables = eligible silver establishments; `estabelecimentos_ativos` = eligible active ones; `gold_distribuicao_porte.empresas` = silver companies, `participacao` sums to 1, `estabelecimentos` = eligible minus `without_company`. Any failed check makes the run exit with code 1. No data rows are written (RST-01). The independent silver x gold reconciliation (by total, UF, status, size and gold grain) is `make reconcile` (`cnpj_lakehouse/reconcile.py`, task 5.2).
 
 ## Evidence from the 2026-09 release
 
