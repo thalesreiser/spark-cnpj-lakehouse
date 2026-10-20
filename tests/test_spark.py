@@ -93,6 +93,15 @@ def test_build_conf_driver_host() -> None:
     assert conf["spark.driver.host"] == "10.0.0.2"
 
 
+def test_event_log_only_when_dir_is_set() -> None:
+    assert "spark.eventLog.enabled" not in build_conf(LakehouseConfig.from_env({}))
+    cfg = LakehouseConfig.from_env({"SPARK_EVENT_LOG_DIR": " file:/tmp/events "})
+    conf = build_conf(cfg)
+    assert conf["spark.eventLog.enabled"] == "true"
+    assert conf["spark.eventLog.dir"] == "file:/tmp/events"
+    assert conf["spark.eventLog.compress"] == "false"
+
+
 class _FakeBuilder:
     def __init__(self) -> None:
         self.calls: dict[str, Any] = {"config": {}}

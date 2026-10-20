@@ -1,0 +1,116 @@
+name: Benchmark
+# RF-08 / RNF-01 (task 6.1, ADR 006): baseline of the main job (silver MERGE + gold) on a real
+# release subset. Manual only: it downloads ~450 MB and runs the job 3 times (Actions minutes are
+# limited). Publishes metrics, Spark event logs and the Spark UI pages rebuilt by a History
+# Server as artifacts; metadata only, never rows (RST-01).
+on:
+  workflow_dispatch:
+    inputs:
+      competencia:
+        description: "Reference month of the initial load (YYYY-MM)"
+        default: "2026-09"
+      next:
+        description: "Synthetic next month merged into silver (YYYY-MM, later than competencia)"
+        default: "2026-10"
+      files:
+        description: "Files to download (make download FILES=...)"
+        default: "lookups Empresas1 Estabelecimentos1"
+      merge_tables:
+        description: "Tables of the synthetic next month (silver MERGE)"
+        default: "empresas estabelecimentos"
+      runs:
+        description: "Repetitions (the median is reported)"
+        default: "3"
+      sample_fraction:
+        description: "Bronze sample fraction (RNF-03); 1.0 = every row (~30 min per main-job run)"
+        default: "0.25"
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      # Local-development/CI credentials only (ephemeral containers); they are not secrets.
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      COMPETENCIA: ${{ inputs.competencia || '2026-09' }}
+      NEXT: ${{ inputs.next || '2026-10' }}
+      FILES: ${{ inputs.files || 'lookups Empresas1 Estabelecimentos1' }}
+      MERGE_TABLES: ${{ inputs.merge_tables || 'empresas estabelecimentos' }}
+      RUNS: ${{ inputs.runs || '3' }}
+      # Deterministic bronze sample (RNF-03, fixed seed): with every row of Estabelecimentos1 one
+      # run of the main job takes ~30 min and the shuffle files fill the runner disk.
+      SPARK_SAMPLE_FRACTION: ${{ inputs.sample_fraction || '0.25' }}
+      CLIENT: docker compose -f infra/docker-compose.yml --profile client run --rm spark-client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install the package
+        run: pip install -e .
+      - name: Runner specification
+        run: |
+          {
+            echo "### Runner"; echo
+            echo "- image: ${ImageOS:-?} ${ImageVersion:-?}; CPUs: $(nproc)"
+            echo "- memory: $(free -h | awk '/^Mem:/ {print $2}'); disk free: $(df -h . | awk 'NR==2 {print $4}')"
+            echo "- CPU: $(lscpu | sed -n 's/^Model name: *//p')"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Free disk space (preinstalled tools the project does not use, ADR 006)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup /usr/share/swift
+          df -h . | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: make download
+        run: make download COMPETENCIA="$COMPETENCIA" FILES="$FILES" && df -h .
+      - name: make up
+        run: make up
+      - name: make bronze (lookups whole, large tables sampled)
+        run: |
+          SPARK_SAMPLE_FRACTION=1.0 make bronze COMPETENCIA="$COMPETENCIA" \
+            TABLES="cnaes motivos municipios naturezas paises qualificacoes"
+          make bronze COMPETENCIA="$COMPETENCIA" TABLES="$MERGE_TABLES"
+      - name: Synthetic next month in bronze (input of the silver MERGE)
+        run: |
+          for table in $MERGE_TABLES; do
+            case "$table" in
+              empresas) column=razao_social ;;
+              estabelecimentos) column=nome_fantasia ;;
+              *) echo "no change column for $table" >&2; exit 1 ;;
+            esac
+            $CLIENT python scripts/silver_next_month.py --source "$COMPETENCIA" --target "$NEXT" \
+              --table "$table" --column "$column" --out "build/benchmark-next-$table.json"
+          done
+      - name: Benchmark (main job x RUNS, event logs on)
+        run: |
+          $CLIENT python scripts/benchmark.py run --competencia "$COMPETENCIA" --next "$NEXT" \
+            --merge-tables $MERGE_TABLES --runs "$RUNS" --out build/benchmark \
+            --info "runner=GitHub-hosted ubuntu-latest ${ImageOS:-} ${ImageVersion:-}" \
+            "spark worker=1 worker, 2 cores, 2g (infra/docker-compose.yml defaults)" \
+            "files=$FILES" "sample=$SPARK_SAMPLE_FRACTION"
+          cat build/benchmark/benchmark.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Spark UI evidence (History Server over the event logs of the median run)
+        run: $CLIENT python scripts/benchmark.py ui --out build/benchmark
+      - name: Make the outputs readable (written by root in the containers)
+        if: always()
+        run: sudo chmod -R a+rX build || true
+      - name: Upload benchmark (metrics, event logs, Spark UI; no data)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-${{ inputs.competencia || '2026-09' }}
+          path: |
+            build/benchmark/
+            build/benchmark-next-*.json
+          retention-days: 90
+          if-no-files-found: warn
+      - name: Service logs
+        if: failure()
+        run: make logs
+      - name: make down
+        if: always()
+        run: make down V=1
