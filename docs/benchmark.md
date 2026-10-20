@@ -2,7 +2,7 @@
 
 Baseline of the main job before any tuning (task 6.1). The tuning itself is task 6.2 and the before × after comparison is task 6.4. Runs execute on GitHub Actions runners ([ADR 006](adr/006-ci-as-execution-environment.md)): every measurement is repeated 3 times, the median is reported and the runner specification is recorded.
 
-> **Status: PENDING.** The method, the helper and the `Benchmark` workflow are in place; the numbers are filled in after the first manual run of the workflow. GitHub only dispatches a `workflow_dispatch` workflow whose file is on the default branch, so that run happens after this change is merged.
+> **Status: measured.** Baseline from the `Benchmark` run [39447843930](https://github.com/thalesreiser/spark-cnpj-lakehouse/actions/runs/39447843930) on `main` (2026-10-20, Spark 3.5.3, median of 3 repetitions). The full sheet, the event logs and the Spark UI pages are in its `benchmark-2026-09` artifact.
 
 ## Main job and reference volume
 
@@ -14,9 +14,9 @@ Baseline of the main job before any tuning (task 6.1). The tuning itself is task
 
 | Item | Value |
 |---|---|
-| Runner | GitHub-hosted `ubuntu-latest` (private repository: 2 vCPU, 8 GB RAM, 14 GB SSD); exact image, CPU model and memory recorded by the workflow in the job summary and in `benchmark.json` |
+| Runner | GitHub-hosted `ubuntu-latest` (image `ubuntu24 20261018.339.1`). The repository is public since 2026-10-20, so the runner has **4 vCPU and 15.6 GiB RAM** (the trial runs below were on the 2 vCPU / 8 GB private-repository runner); recorded in the job summary and in `benchmark.json` |
 | Stack | Docker Compose of the project ([ADR 005](adr/005-docker-environment-images.md)): 1 Spark master, 1 worker (2 cores, 2 GB), driver in `spark-client`, MinIO (s3a) |
-| Versions | Spark 3.5.3, Delta Lake 3.2.1, Python 3.11, Java 17 (`cnpj_lakehouse/versions.py`) |
+| Versions | **Baseline measured on Spark 3.5.3**, Delta Lake 3.2.1, Python 3.11, Java 17 (`cnpj_lakehouse/versions.py`). The project moved to Spark 3.5.8 afterwards (#26, security fix, same data: the silver fingerprints of CI are identical on both versions); task 6.2 measures on 3.5.8, so a small part of any difference may come from the patch release |
 | Key configs | `spark.executor.memory=1g`, `spark.sql.adaptive.enabled=true`, everything else at the Spark defaults (e.g. `spark.sql.shuffle.partitions=200`, `spark.sql.autoBroadcastJoinThreshold=10MB`); the properties actually set are read from the event log |
 
 ## Method
@@ -31,33 +31,40 @@ Baseline of the main job before any tuning (task 6.1). The tuning itself is task
 
 ## Baseline
 
-PENDING: filled after the first manual run of the `Benchmark` workflow (median of 3; the full sheet is `benchmark.md` in the artifact).
+Median of 3 repetitions (median repetition: #3). The main job is the sum of its two steps per repetition; the setup (initial silver load of `2026-09`, run once) is shown for reference.
 
-| Metric (median of 3) | silver `MERGE` | gold | Main job |
-|---|---|---|---|
-| Wall time | | | |
-| Shuffle read / write | | | |
-| Spill (memory / disk) | | | |
-| Tasks | | | |
+| Metric (median of 3) | silver `MERGE` | gold | Main job | Setup: initial silver (1 run) |
+|---|---:|---:|---:|---:|
+| Wall time | 395.1 s | 63.6 s | **459.7 s** | 372.6 s |
+| Jobs / stages / tasks | 66 / 66 / 817 | 85 / 82 / 1,087 | 151 / 148 / 1,904 | 152 / 152 / 2,139 |
+| Shuffle read / write | 1.5 / 1.5 GiB | 145.7 / 145.7 MiB | 1.6 / 1.6 GiB | 486.6 / 486.6 MiB |
+| Spill (memory / disk) | 840.0 / 364.0 MiB | 0 / 0 | 840.0 / 364.0 MiB | 400.0 / 189.6 MiB |
+| Input / output | 1.4 GiB / 269.1 MiB | 93.7 / 1.3 MiB | 1.4 GiB / 270.4 MiB | 127.7 / 264.3 MiB |
+| Executor run time / GC | 662.0 / 18.6 s | 62.4 / 1.3 s | 724.4 / 19.9 s | 619.5 / 23.8 s |
+| Max task skew (max / median) | 15.32x | 18.76x | 18.76x | 14.36x |
+
+Main job per repetition: 454.2 s, 461.1 s, 459.7 s (spread under 2%); shuffle write 1.6 GiB in all three; disk spill 184.7, 364.0 and 364.0 MiB.
 
 | Table | Files | Size | Avg file size | Files per partition |
-|---|---|---|---|---|
-| bronze/empresas | | | | |
-| bronze/estabelecimentos | | | | |
-| silver/empresas | | | | |
-| silver/estabelecimentos | | | | |
-| gold/gold_empresas_cnae_uf_ano | | | | |
-| gold/gold_distribuicao_porte | | | | |
-| gold/gold_situacao_setor | | | | |
+|---|---:|---:|---:|---|
+| bronze/empresas | 15 | 58.7 MiB | 3.9 MiB | 3–12 (2 partitions) |
+| bronze/estabelecimentos | 17 | 165.5 MiB | 9.7 MiB | 8–9 (2 partitions) |
+| silver/empresas | 5 | 102.0 MiB | 20.4 MiB | 5 (not partitioned) |
+| silver/estabelecimentos | 13 | 167.1 MiB | 12.9 MiB | 13 (not partitioned) |
+| gold/gold_empresas_cnae_uf_ano | 2 | 1.3 MiB | 679.7 KiB | 2 |
+| gold/gold_distribuicao_porte | 1 | 2.2 KiB | 2.2 KiB | 1 |
+| gold/gold_situacao_setor | 1 | 8.1 KiB | 8.1 KiB | 1 |
+
+Lookup tables (bronze and silver `cnaes`, `motivos`, `municipios`, `naturezas`, `paises`, `qualificacoes`) are one file each, 3 KiB to 432 KiB.
 
 ## Observations
 
-PENDING: to be written from the measured run (skew, small files, wide shuffles, partitions). Points to check, seen in the logs of the trial runs:
-
-- whole-stage code generation is disabled for some silver plans ("Code grows beyond 64 KB", the row hash over all business columns), so those stages fall back to interpreted execution;
-- the heaviest silver stages run with only 2–3 tasks (few large input splits for 2 cores), with memory and disk spill in the `MERGE` write;
-- the quality counts of silver are a separate full pass over the month;
-- gold and the Delta log reads use many tiny tasks (default shuffle partitions), which also produces high skew ratios on stages that last seconds.
+- **The `MERGE` dominates: 86% of the main job (395 of 460 s).** Its two longest stages are a Delta write stage of 164.5 s with only **3 tasks**, which writes 353 MiB of shuffle and spills 185 MiB to disk, and the `first()` at `silver.py:326` (110.2 s, 3 tasks), an action that forces a full pass over the month before the write. Together they are 70% of the `MERGE` (275 of 395 s).
+- **Too few tasks for the heavy stages, too many for the light ones.** The heaviest silver stages run with 2–3 tasks on a 4-core runner (few large input splits; the worker has 2 cores), so most of the CPU is idle while they spill. Gold does the opposite: 1,087 tasks for 64 s of work (default `spark.sql.shuffle.partitions=200` on tiny aggregations), which is where the 18.8x skew ratio comes from — stages of a few seconds where one task is slower, not real data skew.
+- **Spill in the `MERGE` write** (840 MiB memory, 364 MiB disk) with `spark.executor.memory=1g`: the executor memory and the number of partitions of the write are the first levers.
+- **Code generation** is disabled for the row-hash plans ("Code grows beyond 64 KB" in the trial logs), so those stages run interpreted.
+- **Files:** silver is written as 5 and 13 files of 13–20 MiB, below the usual 128 MiB–1 GiB target, and bronze `empresas` has a partition with 12 files of a few MiB (small files, task 6.3 `OPTIMIZE`). Gold tables are tiny, so their file count does not matter.
+- Candidate changes for task 6.2: drop or cache the `first()` pass, repartition the `MERGE` source to match the cores, enable AQE coalescing with a lower initial `shuffle.partitions` for gold, raise the executor memory within the worker's 2 GB, and `OPTIMIZE` bronze (6.3).
 
 ## After tuning (task 6.2)
 

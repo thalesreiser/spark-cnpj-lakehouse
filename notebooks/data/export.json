@@ -1,0 +1,29 @@
+{
+  "competencia": "2026-09",
+  "gold_rows": {
+    "gold_empresas_cnae_uf_ano": 382999,
+    "gold_distribuicao_porte": 3,
+    "gold_situacao_setor": 424
+  },
+  "files": {
+    "q1_ano_uf.csv": 1798,
+    "q1_cnae.csv": 30,
+    "q2_porte.csv": 3,
+    "q2_uf.csv": 28,
+    "q3_situacao_setor.csv": 424
+  },
+  "recent_years": [
+    2021,
+    2025
+  ],
+  "files_loaded": "lookups Empresas1 Estabelecimentos1",
+  "silver": {
+    "empresas": 4494860,
+    "estabelecimentos": 4753435,
+    "invalid_cnpj": 0,
+    "eligible": 4753435,
+    "eligible_active": 1167397,
+    "without_company": 4258353
+  },
+  "gold_checks_passed": true
+}
