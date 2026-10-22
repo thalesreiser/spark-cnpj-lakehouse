@@ -54,7 +54,7 @@ from pyspark.sql.types import DateType
 
 from cnpj_lakehouse.bronze import BRONZE_LAYER, INGEST_TS, PARTITION_COLUMN, SOURCE_FILE
 from cnpj_lakehouse.download import parse_competencia
-from cnpj_lakehouse.normalize import CNPJ_LENGTH, apply_silver_types, cnpj_check_digits
+from cnpj_lakehouse.normalize import CNPJ_LENGTH, apply_silver_types, cnpj_root, root_check_digits
 from cnpj_lakehouse.schemas import EMPTY_DATE_VALUES, TABLES, get_table
 from cnpj_lakehouse.spark import LakehouseConfig, get_spark
 
@@ -75,7 +75,17 @@ _ROW_NUMBER = "_row_number"
 _KEY_MISSING = "_key_missing"
 _CNPJ_INVALID = "_cnpj_invalid"
 _CNPJ_ZERO = "_cnpj_zero"
+_CNPJ_ROOT = "_cnpj_root"
+_CNPJ_DV = "_cnpj_dv_computed"
 ZERO_CNPJ = "0" * CNPJ_LENGTH
+
+# Spark properties of the silver job (task 6.2, docs/benchmark.md). Bronze holds one month in
+# files of ~10 MB, which Spark packs into input splits of up to (month size / cores): 2-3 tasks
+# for the heaviest stage (typing, row hash, MERGE source) on the 2 executor cores, one of them
+# running alone at the end. 16 MB splits give one task per file and keep both cores busy. Set
+# here, not in `spark.TUNING_CONF`, because the bronze job reads the source CSVs and its
+# deterministic sample (RNF-03) depends on the input splits.
+SILVER_CONF: Mapping[str, str] = MappingProxyType({"spark.sql.files.maxPartitionBytes": "16m"})
 
 
 class InvalidCnpjPolicy(StrEnum):
@@ -277,17 +287,20 @@ def type_and_flag(
     typed = typed.withColumn(_KEY_MISSING, missing)
     if rule.key == RN01_KEY:
         # Built in steps over plain column references: nesting the normalizers inside the
-        # check-digit expression would make the generated code explode (driver OOM).
+        # check-digit expression would make the generated code explode (driver OOM). The root
+        # (12 characters) and the computed check digits are helper columns of their own: the
+        # check digits read the root 12 times, so Spark keeps the root in its own projection
+        # and computes it once per row instead of 12 times inside a conditional (task 6.2).
         missing = F.col(_KEY_MISSING)
         cnpj = F.col(CNPJ_COLUMN)
         zero = F.coalesce(cnpj == ZERO_CNPJ, F.lit(False))
-        valid = F.coalesce(
-            F.substring(cnpj, 13, 2) == cnpj_check_digits(F.substring(cnpj, 1, 12)), F.lit(False)
-        )
+        valid = F.coalesce(F.substring(cnpj, 13, 2) == F.col(_CNPJ_DV), F.lit(False))
         if options.zero_cnpj_is_invalid:
             valid = valid & ~zero
         typed = (
             typed.withColumn(CNPJ_COLUMN, F.concat(*map(F.col, RN01_KEY)))
+            .withColumn(_CNPJ_ROOT, cnpj_root(F.substring(cnpj, 1, 12)))
+            .withColumn(_CNPJ_DV, root_check_digits(_CNPJ_ROOT))
             .withColumn(CNPJ_VALID_COLUMN, F.when(~missing, valid))
             .withColumn(_CNPJ_ZERO, ~missing & zero)
             .withColumn(_CNPJ_INVALID, ~missing & ~F.col(CNPJ_VALID_COLUMN))
@@ -387,6 +400,8 @@ def silver_columns(df: DataFrame) -> list[str]:
         _KEY_MISSING,
         _CNPJ_INVALID,
         _CNPJ_ZERO,
+        _CNPJ_ROOT,
+        _CNPJ_DV,
         _SIMPLES_LATEST_EVENT,
     }
     return [c for c in df.columns if c not in helpers and not c.startswith(_RAW_PREFIX)]
@@ -657,7 +672,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     options = SilverOptions(invalid_cnpj_policy=InvalidCnpjPolicy(args.invalid_cnpj))
     cfg = LakehouseConfig.from_env(os.environ)
-    spark = get_spark(f"silver-{args.competencia}", cfg)
+    spark = get_spark(f"silver-{args.competencia}", cfg, SILVER_CONF)
     try:
         reports = run(
             spark,

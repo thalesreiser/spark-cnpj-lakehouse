@@ -395,3 +395,29 @@ def render_markdown(result: Mapping[str, Any]) -> str:
                     f" | {human_bytes(s['disk_spill_bytes'])} | {s['skew']:.2f}x |"
                 )
     return "\n".join(lines) + "\n"
+
+
+# Queries of the storage-format comparison (ADR 001, task 6.2), run on each copy of the table.
+FORMAT_QUERIES = ("count", "group_by_uf", "active_companies")
+
+
+def render_formats_markdown(source: str, rows: int, results: Sequence[Mapping[str, Any]]) -> str:
+    """CSV x Parquet x Delta sheet: write time, size, files and the median time of each query.
+
+    `results` holds one mapping per format: ``format``, ``write_s``, ``size_bytes``,
+    ``num_files`` and ``queries`` (query name -> median seconds). Metadata only (RST-01).
+    """
+    header = " | ".join(f"`{q}`" for q in FORMAT_QUERIES)
+    lines = [
+        f"### Storage formats (ADR 001): {source}, {rows:,} rows",
+        "",
+        f"| Format | Write | Size | Files | {header} |",
+        "|---|---:|---:|---:|" + "---:|" * len(FORMAT_QUERIES),
+    ]
+    for r in results:
+        times = " | ".join(f"{float(r['queries'].get(q, 0.0)):.1f} s" for q in FORMAT_QUERIES)
+        lines.append(
+            f"| {r['format']} | {float(r['write_s']):.1f} s | {human_bytes(r['size_bytes'])}"
+            f" | {r['num_files']} | {times} |"
+        )
+    return "\n".join(lines) + "\n"

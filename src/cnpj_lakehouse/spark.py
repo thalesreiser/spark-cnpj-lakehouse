@@ -23,6 +23,7 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 
 from pyspark.sql import SparkSession
 
@@ -88,8 +89,28 @@ class LakehouseConfig:
         return f"{base}/{suffix}" if suffix else base
 
 
-def build_conf(cfg: LakehouseConfig) -> dict[str, str]:
-    """Builds the Spark properties for Delta Lake + s3a (pure function)."""
+# Execution tuning shared by every job (task 6.2, RNF-01; measured in docs/benchmark.md).
+TUNING_CONF: Mapping[str, str] = MappingProxyType(
+    {
+        # AQE (ADR 004): coalesce the 200 initial shuffle partitions after each stage and split
+        # skewed join partitions; the initial number stays at the default so a full release
+        # (tens of millions of rows) still gets enough reducers.
+        "spark.sql.adaptive.enabled": "true",
+        "spark.sql.adaptive.coalescePartitions.enabled": "true",
+        "spark.sql.adaptive.skewJoin.enabled": "true",
+        # Delta builds each table snapshot (log replay) with 50 tasks by default: 1,000 of the
+        # 1,087 tasks of the baseline gold step were these, for logs of a few KB.
+        "spark.databricks.delta.snapshotPartitions": "4",
+    }
+)
+
+
+def build_conf(cfg: LakehouseConfig, extra: Mapping[str, str] | None = None) -> dict[str, str]:
+    """Builds the Spark properties for Delta Lake + s3a (pure function).
+
+    `extra` holds job-specific properties (e.g. `cnpj_lakehouse.silver.SILVER_CONF`); they are
+    applied last and override the shared ones.
+    """
     conf: dict[str, str] = {
         # Delta Lake
         "spark.sql.extensions": "io.delta.sql.DeltaSparkSessionExtension",
@@ -105,7 +126,7 @@ def build_conf(cfg: LakehouseConfig) -> dict[str, str]:
             "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider"
         ),
         # Execution
-        "spark.sql.adaptive.enabled": "true",
+        **TUNING_CONF,
         "spark.executor.memory": cfg.executor_memory,
     }
     if cfg.driver_host:
@@ -116,13 +137,16 @@ def build_conf(cfg: LakehouseConfig) -> dict[str, str]:
         conf["spark.eventLog.compress"] = "false"
     if not cfg.jars_preinstalled:
         conf["spark.jars.packages"] = ",".join(SPARK_PACKAGES)
+    conf.update(extra or {})
     return conf
 
 
-def get_spark(app_name: str, cfg: LakehouseConfig | None = None) -> SparkSession:
+def get_spark(
+    app_name: str, cfg: LakehouseConfig | None = None, extra: Mapping[str, str] | None = None
+) -> SparkSession:
     """Creates (or reuses) the SparkSession configured for the lakehouse on MinIO."""
     cfg = cfg or LakehouseConfig.from_env(os.environ)
     builder = SparkSession.builder.appName(app_name).master(cfg.master)
-    for key, value in build_conf(cfg).items():
+    for key, value in build_conf(cfg, extra).items():
         builder = builder.config(key, value)
     return builder.getOrCreate()

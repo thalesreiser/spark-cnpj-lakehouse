@@ -25,3 +25,8 @@ The gold aggregations (RF-05) attach descriptions to codes of the large tables: 
 - No shuffle of the establishments for the lookup joins; the only shuffles of the gold job are the aggregations and the companies x establishments join.
 - A lookup must stay small: if a "lookup" ever grows to hundreds of MB the hint becomes a risk for executor memory and must be removed.
 - The before/after effect is part of the epic 6 benchmark (RF-08).
+
+## Note (2026-10-22, task 6.2): measured, unchanged
+
+The event logs of the 6.1 baseline confirm the plan: every lookup and domain join of gold runs as a `BroadcastHashJoin` and the companies x establishments join (and the anti join that counts establishments without a company) as a `SortMergeJoin`. Gold is 14% of the main job (64 of 460 s) and its time goes mostly to Delta log replay and job overhead, not to joins, so the decision stands: explicit broadcast for lookups, Spark and AQE (`spark.sql.adaptive.autoBroadcastJoinThreshold`, skew join enabled in `cnpj_lakehouse.spark.TUNING_CONF`) for the large join.
+

@@ -113,7 +113,8 @@ services:
       S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
       S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       LAKEHOUSE_BUCKET: ${LAKEHOUSE_BUCKET:-lakehouse}
-      SPARK_EXECUTOR_MEMORY: ${SPARK_EXECUTOR_MEMORY:-1g}
+      # 1.5 GB of the worker's 2 GB (task 6.2: 1 GB spilled in the silver MERGE).
+      SPARK_EXECUTOR_MEMORY: ${SPARK_EXECUTOR_MEMORY:-1536m}
       SPARK_SAMPLE_FRACTION: ${SPARK_SAMPLE_FRACTION:-1.0}
 
 volumes:

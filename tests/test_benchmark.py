@@ -236,3 +236,27 @@ def test_render_markdown_sheet() -> None:
     assert "| silver_merge | 0: save at Delta | 0.6 s | 5 |" in md
     minimal = render_markdown({"summary": summary})
     assert "Files per table" not in minimal and "Longest stages" not in minimal
+
+
+def test_render_formats_markdown() -> None:
+    from cnpj_lakehouse.benchmark import FORMAT_QUERIES, render_formats_markdown
+
+    results = [
+        {
+            "format": "csv",
+            "write_s": 12.34,
+            "size_bytes": 3 * 1024**2,
+            "num_files": 4,
+            "queries": {q: 1.0 for q in FORMAT_QUERIES},
+        },
+        {"format": "delta", "write_s": 5, "size_bytes": 1024, "num_files": 2, "queries": {}},
+    ]
+    text = render_formats_markdown("bronze `estabelecimentos` 2026-09", 1234567, results)
+    lines = text.splitlines()
+    assert (
+        lines[0]
+        == "### Storage formats (ADR 001): bronze `estabelecimentos` 2026-09, 1,234,567 rows"
+    )
+    assert lines[2].startswith("| Format | Write | Size | Files | `count`")
+    assert lines[4] == "| csv | 12.3 s | 3.0 MiB | 4 | 1.0 s | 1.0 s | 1.0 s |"
+    assert lines[5] == "| delta | 5.0 s | 1.0 KiB | 2 | 0.0 s | 0.0 s | 0.0 s |"
