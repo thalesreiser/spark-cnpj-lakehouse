@@ -104,7 +104,7 @@ jobs:
       - name: Verify every file against the manifest (SHA-256, offline)
         run: python -m cnpj_lakehouse.download --competencia "$COMPETENCIA" --files $FILES --verify-only && df -h .
       - name: Save the raw files (push to main only)
-        if: (github.event_name == 'push' && github.ref == 'refs/heads/main' || github.head_ref == 'ci/raw-cache-monthly-check') && steps.raw-cache.outputs.cache-hit != 'true'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.raw-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v5
         with:
           path: data/raw/${{ env.COMPETENCIA }}
