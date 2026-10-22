@@ -54,9 +54,10 @@ def _read(spark: SparkSession, fmt: str, path: str, table: str) -> DataFrame:
 
 
 def _content(spark: SparkSession, path: str) -> tuple[int, int]:
-    jvm = spark.sparkContext._jvm  # type: ignore[attr-defined]
+    jvm = spark.sparkContext._jvm
+    assert jvm is not None
     hadoop_path = jvm.org.apache.hadoop.fs.Path(path)
-    conf = spark.sparkContext._jsc.hadoopConfiguration()  # type: ignore[attr-defined]
+    conf = spark.sparkContext._jsc.hadoopConfiguration()
     summary = hadoop_path.getFileSystem(conf).getContentSummary(hadoop_path)
     return int(summary.getLength()), int(summary.getFileCount())
 
