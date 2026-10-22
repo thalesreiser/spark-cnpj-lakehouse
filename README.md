@@ -109,9 +109,13 @@ The `CI` workflow ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs 
 |---|---|---|---|
 | `lint-test` | `make lint` (ruff, black `--check`, mypy strict on `src`, `scripts` and `infra`), then `make test`: unit tests, then the Delta tests that load the versioned synthetic release (`tests/fixtures/release`) bronze → silver → gold (`test_bronze_counts`, `test_silver_merge`, `test_silver_idempotency`, `test_gold_delta`, `test_time_travel`); fails below 80% coverage | Synthetic fixture and in-memory DataFrames | ~11 min |
 | `smoke` | Builds the Spark image, brings up MinIO + Spark (Docker Compose) and writes/reads a Delta table over s3a | None | ~1.5 min |
-| `bronze` | Downloads `lookups` + `Empresas1` of 2026-09 and runs bronze, silver (+ re-run and a synthetic next month), quality, time travel, gold and reconcile on the Docker stack; only counts are published | Real release subset | ~24 min |
+| `bronze` | Restores `lookups` + `Empresas1` of 2026-09 from the Actions cache (or downloads them on a miss), verifies every SHA-256 against the manifest and runs bronze, silver (+ re-run and a synthetic next month), quality, time travel, gold and reconcile on the Docker stack; only counts are published | Real release subset | ~24 min |
 
 pip downloads are cached by `actions/setup-python` (keyed on `pyproject.toml`).
+
+**Raw-file cache.** The `bronze` job does not depend on the Receita Federal portal being up: it restores `data/raw/<COMPETENCIA>/` with `actions/cache/restore` (key `cnpj-raw-<COMPETENCIA>-<hash of FILES>-<hash of download.py>`, so a downloader change invalidates it), then runs `python -m cnpj_lakehouse.download ... --verify-only`, which fails the job if any zip or extracted file is missing or its size/SHA-256 differs from `manifest.json`. Only pushes to `main` save the cache (`actions/cache/save`); pull requests restore main's cache and never create one. On a miss the files are downloaded as before, so a portal outage combined with a cold cache (GitHub evicts entries unused for 7 days; 10 GB per repository) still fails the job.
+
+**Monthly live check.** The `monthly-check` job of the [`Download`](.github/workflows/download.yml) workflow runs on day 15 (`23 9 15 * *`) and on demand (`monthly_check: true`, optional `competencia`). It finds the most recent month published on the portal that already holds every needed file ([`scripts/latest_competencia.py`](scripts/latest_competencia.py), a WebDAV `PROPFIND` listing), downloads `lookups Empresas1 Estabelecimentos1` straight from the portal and runs bronze, bronze-check, silver, silver-check, quality, gold and reconcile; the job summary holds counts only. On failure it opens an issue labelled `monthly-check` with the failing step and the run link, or comments on the open one.
 
 The reasons are in [ADR 006](docs/adr/006-ci-as-execution-environment.md). The whole stack can still run locally if you have Docker:
 
