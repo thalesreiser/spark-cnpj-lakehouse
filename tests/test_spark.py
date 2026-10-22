@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from cnpj_lakehouse import spark as spark_module
-from cnpj_lakehouse.spark import LakehouseConfig, build_conf, get_spark
+from cnpj_lakehouse.spark import TUNING_CONF, LakehouseConfig, build_conf, get_spark
 from cnpj_lakehouse.versions import SPARK_PACKAGES
 
 
@@ -102,6 +102,22 @@ def test_event_log_only_when_dir_is_set() -> None:
     assert conf["spark.eventLog.compress"] == "false"
 
 
+def test_build_conf_applies_the_tuning() -> None:
+    conf = build_conf(LakehouseConfig())
+    for key, value in TUNING_CONF.items():
+        assert conf[key] == value
+    assert conf["spark.sql.adaptive.enabled"] == "true"
+    assert conf["spark.databricks.delta.snapshotPartitions"] == "4"
+
+
+def test_build_conf_extra_overrides_last() -> None:
+    extra = {"spark.sql.files.maxPartitionBytes": "16m", "spark.executor.memory": "512m"}
+    conf = build_conf(LakehouseConfig(executor_memory="1g"), extra)
+    assert conf["spark.sql.files.maxPartitionBytes"] == "16m"
+    assert conf["spark.executor.memory"] == "512m"
+    assert "spark.sql.files.maxPartitionBytes" not in build_conf(LakehouseConfig())
+
+
 class _FakeBuilder:
     def __init__(self) -> None:
         self.calls: dict[str, Any] = {"config": {}}
@@ -139,3 +155,15 @@ def test_get_spark_applies_configuration(monkeypatch: pytest.MonkeyPatch) -> Non
     assert builder.calls["config"] == build_conf(
         LakehouseConfig(master="spark://m:7077", jars_preinstalled=True)
     )
+
+
+def test_get_spark_applies_extra_properties(monkeypatch: pytest.MonkeyPatch) -> None:
+    builder = _FakeBuilder()
+
+    class _FakeSparkSession:
+        pass
+
+    _FakeSparkSession.builder = builder  # type: ignore[attr-defined]
+    monkeypatch.setattr(spark_module, "SparkSession", _FakeSparkSession)
+    get_spark("test", LakehouseConfig(), {"spark.sql.files.maxPartitionBytes": "16m"})
+    assert builder.calls["config"]["spark.sql.files.maxPartitionBytes"] == "16m"

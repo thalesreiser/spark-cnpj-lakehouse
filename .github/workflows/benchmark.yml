@@ -95,6 +95,11 @@ jobs:
           cat build/benchmark/benchmark.md >> "$GITHUB_STEP_SUMMARY"
       - name: Spark UI evidence (History Server over the event logs of the median run)
         run: $CLIENT python scripts/benchmark.py ui --out build/benchmark
+      - name: Storage formats (ADR 001, CSV x Parquet x Delta of one bronze month)
+        if: contains(env.MERGE_TABLES, 'estabelecimentos')
+        run: |
+          $CLIENT python scripts/format_compare.py --competencia "$COMPETENCIA"             --table estabelecimentos --out build/benchmark/formats
+          cat build/benchmark/formats/formats.md >> "$GITHUB_STEP_SUMMARY"
       - name: Make the outputs readable (written by root in the containers)
         if: always()
         run: sudo chmod -R a+rX build || true

@@ -1,6 +1,6 @@
 # 002 - Partitioning by reference month and state (UF)
 
-- **Status:** accepted for bronze (partitioning by reference month); partitioning by state (UF) to be decided for silver/gold in epic 6
+- **Status:** accepted (bronze by reference month; no partitioning by state (UF) in silver or gold, decided on 2026-10-22, see the note below)
 - **Date:** 2026-10-17
 
 ## Context
@@ -27,3 +27,12 @@ Partitioning by state (UF) was also planned, because most business questions fil
 - One folder per month per table; a month can be reloaded, compared with another (row counts per partition) or dropped on its own.
 - The bronze tables are not partitioned by UF: a query on one state reads the whole month. This is acceptable for bronze, which is read once per month by silver.
 - With a single partition per month, the number and size of files per partition depends on the input splits; compaction (`OPTIMIZE`) and file size are tuned in epic 6.
+
+## Note (2026-10-22, task 6.2): no UF partitioning in silver or gold
+
+Decided while tuning the main job ([benchmark](../benchmark.md)):
+
+- **Silver** holds the current state of each business key and is loaded by a `MERGE` on that key ([ADR 011](011-silver-current-state-merge.md)). The key does not contain the UF and an establishment can move to another state, so a UF partition would not prune the `MERGE` (Delta prunes only on conditions over the partition column) and an update could move a row between partitions. It would also split each table into 27 partitions: silver `estabelecimentos` of the benchmark (167 MiB) would become 27 partitions of about 6 MiB, far below the target file size ([ADR 004](004-target-file-size.md)). Silver stays unpartitioned; reads filtered by UF rely on the Delta file statistics (data skipping), which `OPTIMIZE ... ZORDER BY (uf)` can sharpen (task 6.3).
+- **Gold** tables are a few KB to about 1 MiB in total; one partition per UF would only create 27 tiny files per table.
+- **Bronze** keeps the partition by `competencia` (decisions 1-3 above, unchanged).
+
