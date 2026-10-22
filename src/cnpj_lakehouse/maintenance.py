@@ -6,16 +6,16 @@
   Z-order columns are given. It rewrites files only (``dataChange = false``): the rows, the
   table content and the earlier versions stay the same.
 * **VACUUM** deletes the data files that no version inside the retention window references.
-  The retention is at least ``MIN_RETENTION_HOURS`` (7 days, Delta's own default) so
-  ``versionAsOf`` / ``timestampAsOf`` keep working for a week of loads
-  ([ADR 013](../../docs/adr/013-vacuum-retention-and-time-travel.md)); a shorter one is refused
-  here, and Delta's retention check is never disabled.
+  The default retention, ``DEFAULT_RETENTION_HOURS`` (35 days), keeps the previous monthly
+  load readable with ``versionAsOf`` / ``timestampAsOf`` until the next one; below
+  ``MIN_RETENTION_HOURS`` (7 days, Delta's own default) it is refused here, and Delta's retention
+  check is never disabled ([ADR 013](../../docs/adr/013-table-maintenance-and-vacuum-retention.md)).
 
 Both return a summary of metadata only (files, bytes, partitions; never rows, RST-01). CLI::
 
     python -m cnpj_lakehouse.maintenance optimize --layer silver --tables empresas estabelecimentos
     python -m cnpj_lakehouse.maintenance optimize --layer bronze --where "competencia = '2026-10'"
-    python -m cnpj_lakehouse.maintenance vacuum --layer silver --retention-hours 168
+    python -m cnpj_lakehouse.maintenance vacuum --layer silver --retention-hours 840
 """
 
 from __future__ import annotations
@@ -40,7 +40,8 @@ log = logging.getLogger(__name__)
 
 MIB = 1024 * 1024
 TARGET_FILE_BYTES = 128 * MIB  # ADR 004
-MIN_RETENTION_HOURS = 168  # ADR 013: 7 days, Delta's default `deletedFileRetentionDuration`
+MIN_RETENTION_HOURS = 168  # 7 days, Delta's default `deletedFileRetentionDuration` (floor)
+DEFAULT_RETENTION_HOURS = 35 * 24  # ADR 013: one monthly load cycle plus a margin
 DEFAULT_TABLES = ("empresas", "estabelecimentos")  # the large tables (lookups are 1 file each)
 # Z-order columns per "<layer>/<table>"; empty: compaction only (ADR 013, measured in
 # docs/benchmark.md "OPTIMIZE and VACUUM").
@@ -134,12 +135,12 @@ def optimize(
 
 
 def vacuum(
-    spark: SparkSession, path: str, retention_hours: float = MIN_RETENTION_HOURS
+    spark: SparkSession, path: str, retention_hours: float = DEFAULT_RETENTION_HOURS
 ) -> dict[str, Any]:
     """Deletes the files no version younger than ``retention_hours`` needs (ADR 013).
 
-    Raises ``ValueError`` below ``MIN_RETENTION_HOURS``: a shorter retention would break time
-    travel to the versions of the last week, and the Delta safety check stays on.
+    Raises ``ValueError`` below ``MIN_RETENTION_HOURS``: a shorter retention could delete files
+    that a running job or a recent version still reads, and the Delta safety check stays on.
     """
     from delta.tables import DeltaTable
 
@@ -187,7 +188,7 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     )
     optimize_cmd.add_argument("--max-file-mib", type=int, default=TARGET_FILE_BYTES // MIB)
     sub.choices["vacuum"].add_argument(
-        "--retention-hours", type=float, default=float(MIN_RETENTION_HOURS)
+        "--retention-hours", type=float, default=float(DEFAULT_RETENTION_HOURS)
     )
     return parser.parse_args(argv)
 

@@ -546,7 +546,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     mnt.add_argument("--runs", type=int, default=3)
     mnt.add_argument("--zorder", nargs="*", default=[], help="Z-order silver estabelecimentos")
     mnt.add_argument(
-        "--retention-hours", type=float, default=float(maintenance.MIN_RETENTION_HOURS)
+        "--retention-hours", type=float, default=float(maintenance.DEFAULT_RETENTION_HOURS)
     )
     mnt.add_argument("--out", type=Path, default=Path("build/benchmark/maintenance"))
     return parser.parse_args(argv)

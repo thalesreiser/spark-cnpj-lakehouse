@@ -67,8 +67,8 @@ def test_vacuum_respects_the_retention(spark: SparkSession, tmp_path: Path) -> N
     with pytest.raises(ValueError, match="ADR 013"):
         mt.vacuum(spark, path, retention_hours=0)
     result = mt.vacuum(spark, path)
-    assert result["retention_hours"] == mt.MIN_RETENTION_HOURS
-    # every replaced file is younger than 7 days: nothing deleted, version 0 still readable
+    assert result["retention_hours"] == mt.DEFAULT_RETENTION_HOURS == 840
+    # every replaced file is younger than 35 days: nothing deleted, version 0 still readable
     assert result["files_deleted"] == 0 and result["storage_after"]["files"] == 8
     assert result["live_files"] == 3
     assert spark.read.format("delta").option("versionAsOf", 0).load(path).count() == 200
