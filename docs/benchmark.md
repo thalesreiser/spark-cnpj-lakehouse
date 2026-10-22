@@ -82,7 +82,9 @@ Lookup tables (bronze and silver `cnaes`, `motivos`, `municipios`, `naturezas`, 
 | Executor run time / GC | 662.0 / 18.6 → 201.0 / 4.0 s | 62.4 / 1.3 → 35.9 / 0.6 s | 724.4 / 19.9 → 237.4 / 4.6 s (−67%) | 619.5 / 23.8 → 163.2 / 4.4 s |
 | Max task skew (max / median) | 15.32x → 67.03x | 18.76x → 1.67x | 18.76x → 67.03x | 14.36x → 1.83x |
 
-Main job per repetition: 167.8 s, 169.8 s, 174.3 s (spread under 4%). Files per table are unchanged (silver `empresas` 5 files of 20.4 MiB, silver `estabelecimentos` 13 files of 12.9 MiB, gold 1–2 files), as decided in [ADR 004](adr/004-target-file-size.md) (compaction is task 6.3).
+Main job per repetition: 167.8 s, 169.8 s, 174.3 s (spread under 4%).
+
+**Control runs.** A second run of the tuned branch, [39787450949](https://github.com/thalesreiser/spark-cnpj-lakehouse/actions/runs/39787450949), gave a 187.5 s median (183.6 / 187.5 / 193.5 s, −59.2%), with the same tasks, shuffle and spill: about 10% of runner-to-runner noise. A fresh baseline of `main` on Spark 3.5.9 / Delta 3.3.3, [39792404272](https://github.com/thalesreiser/spark-cnpj-lakehouse/actions/runs/39792404272) (before this tuning), gave **460.6 s** (silver `MERGE` 395.9 s, gold 64.1 s), the same as the 3.5.3 baseline: the version upgrade explains none of the gain. Caveat: both tuned runs got an AMD EPYC 9V74 runner CPU, both baselines an EPYC 7763 (GitHub assigns it; it cannot be chosen). The newer CPU accounts for part of the difference, but not for most of it: the changed stages dropped 4–8x (below) while unchanged work (shuffle volume, files written) stayed the same, and on one machine (a laptop, local Spark, 100,000 synthetic establishments) the quality counts went from 55.8 s to 8.3 s and the silver transformation from 57.6 s to 25.7 s with only the check-digit change. Task 6.4 repeats the comparison. Files per table are unchanged (silver `empresas` 5 files of 20.4 MiB, silver `estabelecimentos` 13 files of 12.9 MiB, gold 1–2 files), as decided in [ADR 004](adr/004-target-file-size.md) (compaction is task 6.3).
 
 **Same results.** The silver run summaries of every repetition (rows in and out, duplicates, invalid and all-zero CNPJs, date parse failures, rows inserted, updated and unchanged, table rows) and the gold summary (table rows, reconciliation checks) are identical to the baseline's, and the silver fingerprints of the CI `bronze` job (7 tables, `empresas` with 4,494,860 rows) are identical to `main`'s.
 
@@ -102,7 +104,20 @@ Main job per repetition: 167.8 s, 169.8 s, 174.3 s (spread under 4%). Files per 
 | Broadcast join ([ADR 003](adr/003-broadcast-join-for-lookup-tables.md)) | Unchanged: the lookup joins are `BroadcastHashJoin`, the large companies × establishments join stays with Spark/AQE; gold time is Delta log replay, not joins (dated note) |
 | AQE and partition coalescing | Kept on, made explicit (coalescing, skew join); initial 200 shuffle partitions kept |
 | `repartition` vs `coalesce` on write | Neither: no fixed partition count before a write; the file count follows the input splits or the AQE-coalesced partitions, and compaction is `OPTIMIZE` (6.3) ([ADR 004](adr/004-target-file-size.md)). The input-split size of silver was the lever that mattered |
-| CSV × Parquet × Delta ([ADR 001](adr/001-storage-format-csv-parquet-delta.md)) | Delta for every layer; measurement below |
+| CSV × Parquet × Delta ([ADR 001](adr/001-storage-format-csv-parquet-delta.md)) | Delta for every layer; measurement below (ADR 001 accepted) |
 | Target file size ([ADR 004](adr/004-target-file-size.md)) | ~128 MiB (64–256 MiB) for the large bronze and silver tables, reached by `OPTIMIZE` in 6.3, not at write time |
 
 The remaining main-job time is mostly CPU of the silver typing (regular expressions of the normalizers, row hash) on the 2 executor cores, Delta log work and the JVM start of each step (2–3 s of each step's wall time is outside the Spark application).
+
+### Storage formats (ADR 001)
+
+`scripts/format_compare.py`, a step of the `Benchmark` workflow (run [39787450949](https://github.com/thalesreiser/spark-cnpj-lakehouse/actions/runs/39787450949)): bronze `estabelecimentos` 2026-09 (1,189,564 rows, all strings) written to MinIO in each format, then three queries (median of 3).
+
+| Format | Write | Size | Files | Full count | Count by `uf` | Distinct active companies |
+|---|---:|---:|---:|---:|---:|---:|
+| CSV | 7.0 s | 189.9 MiB | 3 | 0.7 s | 1.2 s | 1.5 s |
+| Parquet | 5.7 s | 83.5 MiB | 3 | 0.2 s | 0.5 s | 0.5 s |
+| Delta | 7.4 s | 83.6 MiB | 4 | 0.3 s | 0.5 s | 0.7 s |
+
+Parquet and Delta are 2.3x smaller than CSV and 2–3x faster to query; Delta costs 1.7 s more per write and 0.1–0.2 s per query (transaction log) and brings `MERGE`, `replaceWhere`, time travel and atomic commits, so it stays the format of every layer.
+
