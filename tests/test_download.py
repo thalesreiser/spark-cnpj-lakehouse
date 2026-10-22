@@ -471,3 +471,56 @@ def test_requests_session_is_used_by_default(
     _, base_url = source
     run(base_url, tmp_path, ("Cnaes.zip",))
     assert len(created) == 1
+
+
+# --------------------------------------------------------------------------------------------
+# --verify-only (CI cache hit: offline SHA-256 check against the manifest)
+# --------------------------------------------------------------------------------------------
+
+
+def verify_argv(dest: Path, files: str = "cnaes,motivos") -> list[str]:
+    return ["--competencia", COMPETENCIA, "--files", files, "--dest", str(dest), "--verify-only"]
+
+
+def test_verify_only_accepts_an_intact_release_without_requests(
+    source: tuple[FakeSource, str], tmp_path: Path
+) -> None:
+    src, base_url = source
+    run(base_url, tmp_path, ("Cnaes.zip", "Motivos.zip"))
+    src.requests.clear()
+    assert dl.verify_competencia(COMPETENCIA, ("Cnaes.zip", "Motivos.zip"), dest=tmp_path) == []
+    assert dl.main([*verify_argv(tmp_path), "--base-url", base_url]) == 0
+    assert src.requests == []
+
+
+@pytest.mark.parametrize("damage", ["zip_content", "zip_removed", "extracted_removed"])
+def test_verify_only_fails_on_any_mismatch(
+    source: tuple[FakeSource, str], tmp_path: Path, damage: str
+) -> None:
+    src, base_url = source
+    run(base_url, tmp_path, ("Cnaes.zip", "Motivos.zip"))
+    out = tmp_path / COMPETENCIA
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    if damage == "zip_content":  # same size, different bytes: only the SHA-256 catches it
+        size = (out / "Cnaes.zip").stat().st_size
+        (out / "Cnaes.zip").write_bytes(b"x" * size)
+    elif damage == "zip_removed":
+        (out / "Cnaes.zip").unlink()
+    else:
+        (out / manifest["files"][0]["extracted"][0]).unlink()
+    src.requests.clear()
+
+    problems = dl.verify_competencia(COMPETENCIA, ("Cnaes.zip", "Motivos.zip"), dest=tmp_path)
+    assert len(problems) == 1 and problems[0].startswith("Cnaes.zip:")
+    assert dl.main(verify_argv(tmp_path)) == 1
+    assert src.requests == []  # nothing is downloaded again in this mode
+
+
+def test_verify_only_fails_when_a_file_is_not_in_the_manifest(
+    source: tuple[FakeSource, str], tmp_path: Path
+) -> None:
+    _, base_url = source
+    run(base_url, tmp_path, ("Cnaes.zip",))
+    problems = dl.verify_competencia(COMPETENCIA, ("Cnaes.zip", "Motivos.zip"), dest=tmp_path)
+    assert problems == [f"Motivos.zip: not in {tmp_path / COMPETENCIA / 'manifest.json'}"]
+    assert dl.main(verify_argv(tmp_path / "empty")) == 1  # no manifest at all
