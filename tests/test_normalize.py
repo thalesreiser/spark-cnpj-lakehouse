@@ -113,6 +113,14 @@ def test_cnpj_check_digits(ansi: SparkSession) -> None:
     assert _apply(ansi, N.cnpj_check_digits, values) == ["91", "35", "35", "81", None, None, None]
 
 
+def test_cnpj_root_and_root_check_digits(ansi: SparkSession) -> None:
+    roots = ["00.000.000/0001", "12abc34501de", "1234", None]
+    assert _apply(ansi, N.cnpj_root, roots) == ["000000000001", "12ABC34501DE", None, None]
+    df = ansi.createDataFrame([("000000000001",), ("12ABC34501DE",), (None,)], "root string")
+    out = [row[0] for row in df.select(N.root_check_digits("root")).collect()]
+    assert out == ["91", "35", None]
+
+
 def test_check_digit_weights() -> None:
     assert len(N.DV1_WEIGHTS) == 12
     assert len(N.DV2_WEIGHTS) == 13

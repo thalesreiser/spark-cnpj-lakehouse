@@ -303,6 +303,21 @@ def test_silver_columns_drop_every_helper(spark: SparkSession) -> None:
     ]
 
 
+def test_check_digits_read_the_cnpj_root_once(spark: SparkSession) -> None:
+    """Task 6.2: the 12-character root is a helper column, so the optimized plan of
+    ``cnpj_valido`` holds a few regular expressions, not one copy per character (164 before)."""
+    flagged = silver.type_and_flag(
+        bronze_df(spark, "estabelecimentos", [establishment()]), "estabelecimentos"
+    )
+    plan = flagged.select(CNPJ_VALID_COLUMN)._jdf.queryExecution().optimizedPlan().toString()
+    assert plan.lower().count("regexp_replace") <= 30
+    assert flagged.select(CNPJ_VALID_COLUMN).first()[0] is True
+
+
+def test_silver_conf_only_sets_the_input_split_size() -> None:
+    assert dict(silver.SILVER_CONF) == {"spark.sql.files.maxPartitionBytes": "16m"}
+
+
 # --- MERGE helpers (RF-04, ADR 011) ------------------------------------------------------------
 
 

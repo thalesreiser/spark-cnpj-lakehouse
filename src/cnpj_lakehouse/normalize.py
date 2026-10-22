@@ -134,8 +134,13 @@ def _mod11(total: Column) -> Column:
     return ((F.lit(11) - total % 11) % 11) % 10
 
 
-def _root_check_digits(root: Column) -> Column:
-    """Check digits of a validated 12-character root + order (one reference per character)."""
+def root_check_digits(root: ColumnOrName) -> Column:
+    """Check digits of a validated 12-character root + order (one reference per character).
+
+    `root` is referenced 12 times: pass a plain column (e.g. one holding `cnpj_root`) when it
+    is an expensive expression, so Spark computes it once per row (see `silver.type_and_flag`).
+    """
+    root = _col(root)
     codes = [F.ascii(F.substring(root, position, 1)) - 48 for position in range(1, 13)]
     total1 = F.lit(0)
     total2 = F.lit(0)
@@ -152,8 +157,13 @@ def cnpj_check_digits(column: ColumnOrName) -> Column:
 
     Works for the numeric and the alphanumeric CNPJ (Receita Federal, from July 2026).
     """
+    return root_check_digits(cnpj_root(column))
+
+
+def cnpj_root(column: ColumnOrName) -> Column:
+    """12-character CNPJ root + order without mask (alphanumeric allowed); else ``null``."""
     value = strip_mask(column)
-    return _root_check_digits(F.when(value.rlike(r"^[0-9A-Z]{12}$"), value))
+    return F.when(value.rlike(r"^[0-9A-Z]{12}$"), value)
 
 
 def _cnpj_format(column: ColumnOrName) -> Column:
@@ -169,7 +179,7 @@ def is_valid_cnpj(column: ColumnOrName) -> Column:
     ``null``; any other value -> false (usable as a quality flag)."""
     value = _cnpj_format(column)
     valid = F.coalesce(
-        F.substring(value, 13, 2) == _root_check_digits(F.substring(value, 1, 12)), F.lit(False)
+        F.substring(value, 13, 2) == root_check_digits(F.substring(value, 1, 12)), F.lit(False)
     )
     return F.when(_col(column).isNotNull(), valid)
 
