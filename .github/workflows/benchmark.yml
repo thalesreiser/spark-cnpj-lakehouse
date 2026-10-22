@@ -24,6 +24,9 @@ on:
       sample_fraction:
         description: "Bronze sample fraction (RNF-03); 1.0 = every row (~30 min per main-job run)"
         default: "0.25"
+      zorder:
+        description: "Z-order columns tried on silver estabelecimentos in the OPTIMIZE step (task 6.3)"
+        default: "uf"
 
 permissions:
   contents: read
@@ -44,6 +47,7 @@ jobs:
       # Deterministic bronze sample (RNF-03, fixed seed): with every row of Estabelecimentos1 one
       # run of the main job takes ~30 min and the shuffle files fill the runner disk.
       SPARK_SAMPLE_FRACTION: ${{ inputs.sample_fraction || '0.25' }}
+      ZORDER: ${{ inputs.zorder || 'uf' }}
       CLIENT: docker compose -f infra/docker-compose.yml --profile client run --rm spark-client
     steps:
       - uses: actions/checkout@v7
@@ -100,6 +104,12 @@ jobs:
         run: |
           $CLIENT python scripts/format_compare.py --competencia "$COMPETENCIA"             --table estabelecimentos --out build/benchmark/formats
           cat build/benchmark/formats/formats.md >> "$GITHUB_STEP_SUMMARY"
+      # RF-07 (task 6.3): after the formats step, which reads bronze as the main job left it.
+      - name: OPTIMIZE and VACUUM (files and reads before/after, ADR 004 / ADR 013)
+        run: |
+          $CLIENT python scripts/benchmark.py maintenance --merge-tables $MERGE_TABLES \
+            --runs "$RUNS" --zorder $ZORDER --out build/benchmark/maintenance
+          cat build/benchmark/maintenance/maintenance.md >> "$GITHUB_STEP_SUMMARY"
       - name: Make the outputs readable (written by root in the containers)
         if: always()
         run: sudo chmod -R a+rX build || true
