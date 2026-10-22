@@ -66,7 +66,7 @@ run:
 	python -m cnpj_lakehouse.pipeline --competencia $(COMPETENCIA)
 
 lint:
-	ruff check src tests scripts infra && black --check src tests scripts infra && mypy src
+	ruff check src tests scripts infra && black --check src tests scripts infra && mypy src scripts infra
 
 fmt:
 	ruff check --fix src tests scripts infra && black src tests scripts infra

@@ -101,6 +101,18 @@ The notebook [`notebooks/02-business-questions.ipynb`](notebooks/02-business-que
 | **CI on every pull request** | Lint, type-check, tests; the `smoke` job, which builds the image, brings up Spark + MinIO and writes/reads a Delta table; and the `bronze` job, which ingests a real release subset into bronze and reconciles the row counts |
 | **Manual workflows** | Heavy runs: the `Download` workflow (a reference month from the real source, manifest as an artifact); the `Benchmark` workflow (main job 3 times, metrics, Spark event logs and Spark UI pages as artifacts, [`docs/benchmark.md`](docs/benchmark.md)) |
 
+### Continuous integration
+
+The `CI` workflow ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every pull request and on every push to `main`; its three jobs run in parallel and are required checks for merging. A new push to a pull request cancels the run still in progress.
+
+| Job | What it runs | Data | Typical time |
+|---|---|---|---|
+| `lint-test` | `make lint` (ruff, black `--check`, mypy strict on `src`, `scripts` and `infra`), then `make test`: unit tests, then the Delta tests that load the versioned synthetic release (`tests/fixtures/release`) bronze → silver → gold (`test_bronze_counts`, `test_silver_merge`, `test_silver_idempotency`, `test_gold_delta`, `test_time_travel`); fails below 80% coverage | Synthetic fixture and in-memory DataFrames | ~11 min |
+| `smoke` | Builds the Spark image, brings up MinIO + Spark (Docker Compose) and writes/reads a Delta table over s3a | None | ~1.5 min |
+| `bronze` | Downloads `lookups` + `Empresas1` of 2026-09 and runs bronze, silver (+ re-run and a synthetic next month), quality, time travel, gold and reconcile on the Docker stack; only counts are published | Real release subset | ~24 min |
+
+pip downloads are cached by `actions/setup-python` (keyed on `pyproject.toml`).
+
 The reasons are in [ADR 006](docs/adr/006-ci-as-execution-environment.md). The whole stack can still run locally if you have Docker:
 
 ### Run the Docker stack locally (optional)
