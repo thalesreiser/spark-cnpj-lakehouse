@@ -83,8 +83,32 @@ jobs:
           cache-dependency-path: pyproject.toml
       - name: Install the package
         run: pip install -e .
-      - name: make download
-        run: make download COMPETENCIA="$COMPETENCIA" FILES="$FILES" && df -h .
+      # RF-01 / ADR 006 (2026-10-22 note): the Receita files come from the Actions cache so a
+      # portal outage does not block pull requests. Every run restores; only pushes to main save
+      # (PR runs never create caches but restore main's). The key changes with the month, the
+      # file list and the downloader. A cold cache (evicted after 7 days unused) still downloads.
+      - name: Raw cache key
+        id: raw-key
+        run: |
+          files_hash="$(printf '%s' "$FILES" | sha256sum | cut -c1-16)"
+          echo "key=cnpj-raw-${COMPETENCIA}-${files_hash}-${{ hashFiles('src/cnpj_lakehouse/download.py') }}" >> "$GITHUB_OUTPUT"
+      - name: Restore the raw files (Actions cache)
+        id: raw-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: data/raw/${{ env.COMPETENCIA }}
+          key: ${{ steps.raw-key.outputs.key }}
+      - name: make download (cache miss only)
+        if: steps.raw-cache.outputs.cache-hit != 'true'
+        run: make download COMPETENCIA="$COMPETENCIA" FILES="$FILES"
+      - name: Verify every file against the manifest (SHA-256, offline)
+        run: python -m cnpj_lakehouse.download --competencia "$COMPETENCIA" --files $FILES --verify-only && df -h .
+      - name: Save the raw files (push to main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.raw-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: data/raw/${{ env.COMPETENCIA }}
+          key: ${{ steps.raw-key.outputs.key }}
       - name: make up
         run: make up
       - name: make bronze (every downloaded table)

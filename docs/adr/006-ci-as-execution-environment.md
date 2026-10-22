@@ -31,3 +31,11 @@ Split the work between the laptop and CI:
 - Runner performance varies between runs, so the benchmark (epic 6) repeats each measurement 3 times, reports the median and records the runner specification. Spark UI evidence comes from event logs uploaded as artifacts and opened in a local Spark History Server.
 - Making the repository public (planned for publication) doubles the runner size and removes the minutes limit.
 - The README keeps the instructions to run the stack locally with Docker for anyone who has the resources.
+
+## Update 2026-10-22: raw-file cache in PR CI and a monthly live check
+
+On 2026-10-22 `arquivos.receitafederal.gov.br` refused connections for hours. The required `bronze` job, which downloaded `lookups` + `Empresas1` of 2026-09 on every pull request, failed and blocked merges for reasons unrelated to the change under review.
+
+- **Pull requests** now read those files from a GitHub Actions cache (`actions/cache/restore`, key `cnpj-raw-<COMPETENCIA>-<hash of FILES>-<hash of download.py>`). Integrity is kept: `python -m cnpj_lakehouse.download --verify-only` checks every zip and extracted file against the SHA-256 and sizes in `manifest.json` and fails the job on any mismatch. Only pushes to `main` save the cache, so a pull request cannot create or replace an entry; it restores main's. A miss falls back to the portal, so an outage combined with a cold cache (entries unused for 7 days are evicted; 10 GB per repository) still fails.
+- **The live RF-01 proof moves from every pull request to a monthly check** plus the downloader tests (`tests/test_download.py`, local HTTP server). The `monthly-check` job of `download.yml` runs on day 15 and on demand: it discovers the most recent published month (WebDAV listing, `scripts/latest_competencia.py`), downloads `lookups Empresas1 Estabelecimentos1` without the cache, runs bronze → silver → gold with their checks and opens or updates a `monthly-check` issue on failure. The `Download` workflow still runs on pull requests that touch the downloader.
+- Consequence: a change in the portal (new URL, new layout, a broken release) is detected within a month instead of on the next pull request; the issue makes it visible without watching the Actions tab.

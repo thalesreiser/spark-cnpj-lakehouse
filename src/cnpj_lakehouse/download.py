@@ -7,7 +7,11 @@ and records a ``manifest.json`` with the SHA-256 of every zip (see ``docs/data-s
 Usage::
 
     python -m cnpj_lakehouse.download --competencia 2026-09 [--files lookups Empresas0]
-        [--dest data/raw] [--base-url URL]
+        [--dest data/raw] [--base-url URL] [--verify-only]
+
+``--verify-only`` makes no request: it checks that every selected zip, and the files extracted
+from it, are on disk and match the size and SHA-256 recorded in ``manifest.json`` (used by CI
+on files restored from the Actions cache) and exits with 1 on any mismatch.
 
 The module follows RNF-04: pure functions (validation, file selection, URLs, paths, manifest)
 are kept apart from the I/O functions (HTTP download, unzip, manifest persistence) and from the
@@ -437,6 +441,25 @@ def download_competencia(
     return manifest
 
 
+def verify_competencia(
+    competencia: str, files: Sequence[str], *, dest: Path = DEFAULT_DEST
+) -> list[str]:
+    """Offline integrity check of a release on disk; returns the problems (empty when valid).
+
+    A file passes when it is in the manifest, its zip has the recorded size and SHA-256 and
+    every file extracted from it exists (the same rule the downloader uses to skip a file).
+    """
+    out_dir = competencia_dir(dest, parse_competencia(competencia))
+    records = records_from_manifest(load_manifest(out_dir / MANIFEST_NAME))
+    problems = []
+    for name in files:
+        if name not in records:
+            problems.append(f"{name}: not in {out_dir / MANIFEST_NAME}")
+        elif not _is_current(records[name], out_dir / name, out_dir):
+            problems.append(f"{name}: missing, size/SHA-256 differs or extracted files missing")
+    return problems
+
+
 def parse_args(argv: Sequence[str] | None, env: Mapping[str, str]) -> argparse.Namespace:
     """Parses and validates the command line (pure apart from argparse's own exit on error)."""
     parser = argparse.ArgumentParser(
@@ -467,6 +490,11 @@ def parse_args(argv: Sequence[str] | None, env: Mapping[str, str]) -> argparse.N
     )
     parser.add_argument("--retries", type=int, default=5, help="retries per file (default 5)")
     parser.add_argument("--timeout", type=float, default=60.0, help="seconds (default 60)")
+    parser.add_argument(
+        "--verify-only",
+        action="store_true",
+        help="no download: check the files on disk against manifest.json (exit 1 on mismatch)",
+    )
     args = parser.parse_args(argv)
     try:
         args.files = resolve_files(args.files)
@@ -486,6 +514,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point; returns the process exit code."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     args = parse_args(argv, os.environ)
+    if args.verify_only:
+        problems = verify_competencia(args.competencia, args.files, dest=args.dest)
+        for problem in problems:
+            log.error("%s", problem)
+        if not problems:
+            log.info("verified %d file(s) against the manifest (SHA-256)", len(args.files))
+        return 1 if problems else 0
     log.info(
         "reference month %s: %d file(s) from %s into %s",
         args.competencia,

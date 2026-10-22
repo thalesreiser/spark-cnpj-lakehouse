@@ -1,18 +1,28 @@
 # RF-01 / ADR 006: downloads one CNPJ release (reference month) from the real Receita Federal
 # source on a GitHub runner and publishes ONLY the manifest and a file listing as an artifact.
 # Raw data is never uploaded (RST-01; artifact quota is 500 MB).
+# The monthly-check job (ADR 006, 2026-10-22 note) is the live RF-01 proof since PR CI reads
+# the files from the Actions cache: on day 15 it downloads the most recent published month
+# straight from the portal, runs bronze -> silver -> gold with their checks and opens (or
+# comments on) a `monthly-check` issue when anything fails.
 name: Download
 
 on:
   workflow_dispatch:
     inputs:
       competencia:
-        description: "Reference month (COMPETENCIA), YYYY-MM"
-        required: true
+        description: "Reference month (COMPETENCIA), YYYY-MM. Empty: 2026-09 for the download, the latest published month for the monthly check."
+        required: false
       files:
         description: "Files or groups (lookups, empresas, estabelecimentos, socios, simples, all; or e.g. Empresas0). The runner has ~14 GB of disk."
         required: false
         default: "lookups"
+      monthly_check:
+        description: "Run the monthly live check instead (lookups Empresas1 Estabelecimentos1, full pipeline; opens an issue on failure)"
+        type: boolean
+        default: false
+  schedule:
+    - cron: "23 9 15 * *"  # day 15, 09:23 UTC (the release is usually published in the first days)
   # Proves the real end-to-end download on pull requests that touch the download code.
   pull_request:
     paths:
@@ -25,6 +35,7 @@ permissions:
 
 jobs:
   download:
+    if: github.event_name != 'schedule' && !inputs.monthly_check
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -91,3 +102,114 @@ jobs:
             data/raw/${{ env.COMPETENCIA }}/files.tsv
           retention-days: 30
           if-no-files-found: error
+
+  monthly-check:
+    if: github.event_name == 'schedule' || inputs.monthly_check
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      issues: write  # open or comment on the `monthly-check` issue
+    env:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      # Bounded subset that exercises every layer (as in gold-analysis.yml), ~0.5 GB zipped.
+      FILES: "lookups Empresas1 Estabelecimentos1"
+      SPARK_SAMPLE_FRACTION: "1.0"
+      INPUT_COMPETENCIA: ${{ inputs.competencia }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install the package
+        run: pip install -e .
+      - name: Resolve the reference month (input, or latest published on the portal)
+        run: |
+          if [ -n "$INPUT_COMPETENCIA" ]; then
+            competencia="$INPUT_COMPETENCIA"
+          else
+            competencia="$(python scripts/latest_competencia.py --files $FILES)"
+          fi
+          if ! [[ "$competencia" =~ ^[0-9]{4}-(0[1-9]|1[0-2])$ ]]; then
+            echo "::error::competencia must be YYYY-MM"; exit 1
+          fi
+          echo "COMPETENCIA=${competencia}" >> "$GITHUB_ENV"
+          echo "### Monthly Receita check: ${competencia} (${FILES})" >> "$GITHUB_STEP_SUMMARY"
+      - name: make download (straight from the portal, no cache)
+        run: make download COMPETENCIA="$COMPETENCIA" FILES="$FILES" && df -h .
+      - name: make up
+        run: make up
+      - name: make bronze
+        run: make bronze COMPETENCIA="$COMPETENCIA"
+      - name: make bronze-check (source lines == bronze rows)
+        run: make bronze-check COMPETENCIA="$COMPETENCIA"
+      - name: Free the zips (bronze holds the data now)
+        run: rm -f "data/raw/${COMPETENCIA}"/*.zip && df -h .
+      - name: make silver
+        run: make silver COMPETENCIA="$COMPETENCIA"
+      - name: make silver-check (no duplicated business key, counts reconciled)
+        run: make silver-check COMPETENCIA="$COMPETENCIA"
+      - name: make quality (error rules block)
+        run: make quality COMPETENCIA="$COMPETENCIA"
+      - name: make gold (every gold table has rows, sums reconciled)
+        run: |
+          make gold COMPETENCIA="$COMPETENCIA"
+          jq -e '.passed and ([.tables[] | select(.rows > 0)] | length == 3)'             "build/gold-${COMPETENCIA}.json"
+      - name: make reconcile (gold totals == silver recomputed)
+        run: |
+          make reconcile COMPETENCIA="$COMPETENCIA"
+          jq -e '.passed' build/reconcile/reconcile.json
+      - name: Summary (counts only, RST-01)
+        if: always()
+        run: |
+          for f in build/bronze-check/bronze-check.md build/silver-check/silver-check.md             "build/quality-${COMPETENCIA}/quality.md" "build/gold-${COMPETENCIA}.md"             build/reconcile/reconcile.md; do
+            cat "$f" >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+          done
+      - name: Upload counts (no data)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: monthly-check-${{ env.COMPETENCIA || 'unresolved' }}
+          path: |
+            data/raw/${{ env.COMPETENCIA }}/manifest.json
+            build/*.json
+            build/*.md
+            build/bronze-check/
+            build/silver-check/
+            build/quality-*/
+            build/reconcile/
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Service logs
+        if: failure()
+        run: make logs
+      - name: make down
+        if: always()
+        run: make down V=1
+      - name: Open or update the monthly-check issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          competencia="${COMPETENCIA:-unresolved}"
+          failed="$(gh api "repos/${GH_REPO}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}/jobs"             --jq '.jobs[] | select(.name == "monthly-check") | .steps[]
+              | select(.conclusion == "failure") | "- `\(.name)`"' || true)"
+          {
+            echo "The monthly Receita Federal check failed for \`${competencia}\` (files: ${FILES})."
+            echo
+            echo "Failing step(s):"
+            echo "${failed:-- (see the run log)}"
+            echo
+            echo "Run: ${RUN_URL} (event: ${GITHUB_EVENT_NAME}, ref: ${GITHUB_REF_NAME})"
+          } > issue.md
+          gh label create monthly-check --color B60205             --description "Failure of the monthly live Receita check (download.yml)" 2>/dev/null || true
+          number="$(gh issue list --label monthly-check --state open --limit 1 --json number --jq '.[0].number // empty')"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body-file issue.md
+          else
+            gh issue create --title "Monthly Receita check failed (${competencia})"               --label monthly-check --body-file issue.md
+          fi
