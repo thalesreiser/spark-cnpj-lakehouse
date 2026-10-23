@@ -96,3 +96,19 @@ time-travel:  ## RF-06 proof: version N-1 reproduces the recorded result (aggreg
 # "--next 2026-10 --merge-tables empresas --runs 3" (the Benchmark workflow runs it end to end).
 benchmark:  ## RF-08 baseline: main job N times, median metrics and event logs in build/benchmark
 	$(SPARK_RUN) python scripts/benchmark.py run --competencia $(COMPETENCIA) $(BENCH_ARGS)
+
+.PHONY: optimize vacuum
+# RF-07 (task 6.3): OPTIMIZE compacts LAYER (default silver) tables to ~128 MiB files (ADR 004);
+# VACUUM deletes files older than RETENTION_HOURS (default 840 h = 35 days: the previous monthly
+# version stays readable for time travel; refused below 168 h, ADR 013).
+# MAINT_ARGS e.g. "--where \"competencia = '2026-10'\"" (bronze month) or "--zorder uf".
+LAYER ?= silver
+RETENTION_HOURS ?= 840
+optimize:  ## RF-07: OPTIMIZE (compaction) of the large tables of LAYER, summary in build/
+	$(SPARK_RUN) python -m cnpj_lakehouse.maintenance optimize --layer $(LAYER) \
+		$(if $(strip $(TABLES)),--tables $(TABLES),) --summary build/optimize-$(LAYER).json $(MAINT_ARGS)
+
+vacuum:  ## RF-07: VACUUM of LAYER with RETENTION_HOURS (refused below 168 h, ADR 013)
+	$(SPARK_RUN) python -m cnpj_lakehouse.maintenance vacuum --layer $(LAYER) \
+		$(if $(strip $(TABLES)),--tables $(TABLES),) --retention-hours $(RETENTION_HOURS) \
+		--summary build/vacuum-$(LAYER).json

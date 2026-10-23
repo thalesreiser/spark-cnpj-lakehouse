@@ -21,12 +21,20 @@ after the MERGE and of the gold tables of the median run, with live files per pa
 Output (metadata only, never rows, RST-01): ``<out>/benchmark.json``, ``<out>/benchmark.md``,
 ``<out>/eventlogs/`` and the run summaries in ``<out>/setup`` and ``<out>/run-<i>/``.
 
+``maintenance`` (task 6.3, RF-07) runs after ``run`` on the same tables: files per table and
+partition, a read workload on silver (median of ``--runs``) and Delta data-skipping reach, before
+and after ``OPTIMIZE`` (compaction, then an optional Z-order of silver ``estabelecimentos``), then
+``VACUUM`` with the ADR 013 retention; the fingerprints before and after must be equal. Output:
+``<out>/maintenance.json`` and ``<out>/maintenance.md``.
+
 ``ui`` rebuilds the Spark UI of the median run from the event logs with a Spark History Server
 and saves its REST API JSON and the server-rendered jobs/stages/SQL pages to ``<out>/spark-ui``.
 
     python scripts/benchmark.py run --competencia 2026-09 --next 2026-10 \
         --merge-tables empresas estabelecimentos --runs 3 --out build/benchmark
     python scripts/benchmark.py ui --out build/benchmark
+    python scripts/benchmark.py maintenance --merge-tables empresas estabelecimentos \
+        --zorder uf --out build/benchmark/maintenance
 """
 
 from __future__ import annotations
@@ -39,17 +47,22 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from cnpj_lakehouse import maintenance
 from cnpj_lakehouse.benchmark import (
     AppMetrics,
     file_stats,
+    human_bytes,
+    median,
     parse_event_log,
     render_markdown,
     summarize,
 )
 from cnpj_lakehouse.bronze import BRONZE_LAYER
+from cnpj_lakehouse.fingerprint import table_fingerprint
 from cnpj_lakehouse.spark import LakehouseConfig, get_spark
 from cnpj_lakehouse.versions import DELTA_VERSION, SPARK_VERSION
 
@@ -289,6 +302,232 @@ def cmd_ui(args: argparse.Namespace) -> int:
     return 0
 
 
+# Read workload of the maintenance step: gold-like aggregations and filtered reads on silver.
+# Predicates of the data-skipping check: (table, column, value); the CNAE is retail of clothing,
+# a frequent code. Only counts and timings are recorded, never rows (RST-01).
+SKIPPING_PREDICATES = (
+    ("estabelecimentos", "uf", "SP"),
+    ("estabelecimentos", "cnae_fiscal_principal", "4781400"),
+)
+
+
+def _read_queries(spark: Any, silver: str) -> dict[str, Callable[[], Any]]:
+    from pyspark.sql import functions as F
+
+    def est() -> Any:
+        return spark.read.format("delta").load(f"{silver}/estabelecimentos")
+
+    def emp() -> Any:
+        return spark.read.format("delta").load(f"{silver}/empresas")
+
+    active = F.col("situacao_cadastral") == "02"
+    return {
+        "establishments by UF and status": lambda: est()
+        .groupBy("uf", "situacao_cadastral")
+        .count()
+        .collect(),
+        "active companies in SP (filter uf)": lambda: est()
+        .where((F.col("uf") == "SP") & active)
+        .select("cnpj_basico")
+        .distinct()
+        .count(),
+        "establishments of one CNAE (filter)": lambda: est()
+        .where(F.col("cnae_fiscal_principal") == "4781400")
+        .count(),
+        "capital by company size": lambda: emp()
+        .groupBy("porte_empresa")
+        .agg(F.sum("capital_social"))
+        .collect(),
+        "active establishments by size (join)": lambda: est()
+        .where(active)
+        .select("cnpj_basico")
+        .join(emp().select("cnpj_basico", "porte_empresa"), "cnpj_basico")
+        .groupBy("porte_empresa")
+        .count()
+        .collect(),
+    }
+
+
+def _skipping(spark: Any, silver: str) -> dict[str, dict[str, int]]:
+    """Live files whose min/max of the column may hold the value (what Delta data skipping
+    reads) out of all live files, per predicate."""
+    from pyspark.sql import functions as F
+
+    result: dict[str, dict[str, int]] = {}
+    for table, column, value in SKIPPING_PREDICATES:
+        per_file = (
+            spark.read.format("delta")
+            .load(f"{silver}/{table}")
+            .groupBy(F.input_file_name().alias("file"))
+            .agg(F.min(column).alias("lo"), F.max(column).alias("hi"))
+        )
+        hit = (F.col("lo") <= value) & (F.col("hi") >= value)
+        row = per_file.agg(F.count("*").alias("files"), F.sum(hit.cast("int")).alias("hit")).first()
+        result[f"{table}.{column} = '{value}'"] = {
+            "files": int(row["files"] or 0),
+            "may_match": int(row["hit"] or 0),
+        }
+    return result
+
+
+def _state(
+    spark: Any, tables: dict[str, str], silver: str, runs: int, with_reads: bool
+) -> dict[str, Any]:
+    state: dict[str, Any] = {
+        "files": {name: maintenance.table_files(spark, path) for name, path in tables.items()},
+    }
+    if with_reads:
+        reads: dict[str, list[float]] = {}
+        for name, query in _read_queries(spark, silver).items():
+            reads[name] = []
+            for _ in range(runs):
+                start = time.monotonic()
+                query()
+                reads[name].append(round(time.monotonic() - start, 2))
+        state["reads"] = {name: {"median_s": median(v), "runs_s": v} for name, v in reads.items()}
+        state["reads_total_s"] = round(sum(r["median_s"] for r in state["reads"].values()), 2)
+        state["skipping"] = _skipping(spark, silver)
+    return state
+
+
+def render_maintenance(result: dict[str, Any]) -> str:
+    """Markdown sheet of the maintenance step (metadata only)."""
+    states = result["states"]
+    names = list(states)
+    lines = [
+        "# OPTIMIZE and VACUUM (task 6.3)",
+        "",
+        f"Target file size {human_bytes(result['target_file_bytes'])}; VACUUM retention "
+        f"{result['retention_hours']:g} h; reads: median of {result['runs']}.",
+        "",
+        "## Files per table",
+        "",
+        "| Table | " + " | ".join(names) + " |",
+        "|---|" + "---:|" * len(names),
+    ]
+    for table in states[names[0]]["files"]:
+        cells = []
+        for name in names:
+            f = states[name]["files"][table]
+            per = f["files_per_partition_min"], f["files_per_partition_max"]
+            spread = f"{per[0]}" if per[0] == per[1] else f"{per[0]}–{per[1]}"
+            cells.append(
+                f"{f['num_files']} files, {human_bytes(f['size_bytes'])}, avg "
+                f"{human_bytes(f['avg_file_bytes'])}, {spread}/partition"
+            )
+        lines.append(f"| {table} | " + " | ".join(cells) + " |")
+    lines += [
+        "",
+        "## OPTIMIZE",
+        "",
+        "| Table | Operation | Files removed → added | Bytes removed → added | Time |",
+        "|---|---|---:|---:|---:|",
+    ]
+    for op in result["optimize"]:
+        lines.append(
+            f"| {op['table']} | {op['operation']} | {op['files_removed']} → {op['files_added']}"
+            f" | {human_bytes(op['bytes_removed'])} → {human_bytes(op['bytes_added'])}"
+            f" | {op['seconds']:.1f} s |"
+        )
+    measured = [n for n in names if "reads" in states[n]]
+    lines += ["", "## Read workload on silver (median, s)", ""]
+    lines += ["| Query | " + " | ".join(measured) + " |", "|---|" + "---:|" * len(measured)]
+    for query in states[measured[0]]["reads"]:
+        values = " | ".join(f"{states[n]['reads'][query]['median_s']:.2f}" for n in measured)
+        lines.append(f"| {query} | {values} |")
+    total = " | ".join(f"**{states[n]['reads_total_s']:.2f}**" for n in measured)
+    lines += [f"| **Total** | {total} |", "", "## Data skipping (files that may match / live)", ""]
+    lines += ["| Predicate | " + " | ".join(measured) + " |", "|---|" + "---:|" * len(measured)]
+    for pred in states[measured[0]]["skipping"]:
+        hits = [states[n]["skipping"][pred] for n in measured]
+        lines.append(
+            f"| `{pred}` | " + " | ".join(f"{c['may_match']} / {c['files']}" for c in hits) + " |"
+        )
+    lines += [
+        "",
+        "## VACUUM",
+        "",
+        "| Table | Retention | Files on storage before → after | Deleted | Live files |",
+        "|---|---:|---:|---:|---:|",
+    ]
+    for vac in result["vacuum"]:
+        lines.append(
+            f"| {vac['table']} | {vac['retention_hours']:g} h | {vac['storage_before']['files']}"
+            f" → {vac['storage_after']['files']} | {vac['files_deleted']} | {vac['live_files']} |"
+        )
+    lines += ["", "## Same results", ""]
+    for table, check in result["checks"].items():
+        lines.append(
+            f"- {table}: fingerprint {'identical' if check['same_fingerprint'] else 'DIFFERENT'}"
+            f" ({check['rows']} rows); version {check['version_before']} still readable after"
+            f" VACUUM: {'yes' if check['time_travel_ok'] else 'NO'}"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def cmd_maintenance(args: argparse.Namespace) -> int:
+    from delta.tables import DeltaTable
+
+    cfg = LakehouseConfig.from_env(os.environ)
+    silver = cfg.path("benchmark", "silver")
+    tables = {f"bronze/{t}": cfg.path(BRONZE_LAYER, t) for t in args.merge_tables}
+    tables |= {f"silver/{t}": f"{silver}/{t}" for t in args.merge_tables}
+    with_reads = {"empresas", "estabelecimentos"} <= set(args.merge_tables)
+    spark = get_spark("benchmark-maintenance", cfg)
+    try:
+
+        def read(path: str) -> Any:
+            return spark.read.format("delta").load(path)
+
+        fingerprints = {n: table_fingerprint(read(p)).as_dict() for n, p in tables.items()}
+        versions = {
+            n: int(DeltaTable.forPath(spark, p).history(1).collect()[0]["version"])
+            for n, p in tables.items()
+        }
+        states = {"before": _state(spark, tables, silver, args.runs, with_reads)}
+        ops = [{"table": n, **maintenance.optimize(spark, p)} for n, p in tables.items()]
+        states["after compaction"] = _state(spark, tables, silver, args.runs, with_reads)
+        if args.zorder and "estabelecimentos" in args.merge_tables:
+            name = "silver/estabelecimentos"
+            ops.append({"table": name, **maintenance.optimize(spark, tables[name], args.zorder)})
+            label = f"after Z-order ({', '.join(args.zorder)})"
+            states[label] = _state(spark, tables, silver, args.runs, with_reads)
+        vacuums = [
+            {"table": n, **maintenance.vacuum(spark, p, args.retention_hours)}
+            for n, p in tables.items()
+        ]
+        checks = {}
+        for name, path in tables.items():
+            after = table_fingerprint(read(path)).as_dict()
+            old = spark.read.format("delta").option("versionAsOf", versions[name]).load(path)
+            checks[name] = {
+                "rows": after["rows"],
+                "same_fingerprint": after == fingerprints[name],
+                "version_before": versions[name],
+                "time_travel_ok": table_fingerprint(old).as_dict() == fingerprints[name],
+            }
+    finally:
+        spark.stop()
+    result = {
+        "target_file_bytes": maintenance.TARGET_FILE_BYTES,
+        "retention_hours": args.retention_hours,
+        "runs": args.runs,
+        "fingerprints": fingerprints,
+        "states": states,
+        "optimize": ops,
+        "vacuum": vacuums,
+        "checks": checks,
+    }
+    out: Path = args.out
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "maintenance.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    markdown = render_maintenance(result)
+    (out / "maintenance.md").write_text(markdown, encoding="utf-8")
+    print(markdown)
+    ok = all(c["same_fingerprint"] and c["time_travel_ok"] for c in checks.values())
+    return 0 if ok else 1
+
+
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="python scripts/benchmark.py", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -302,6 +541,14 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     ui = sub.add_parser("ui", help="save the Spark UI of the median run (History Server)")
     ui.add_argument("--out", type=Path, default=Path("build/benchmark"))
     ui.add_argument("--timeout", type=int, default=180)
+    mnt = sub.add_parser("maintenance", help="files and reads before/after OPTIMIZE and VACUUM")
+    mnt.add_argument("--merge-tables", nargs="+", default=["empresas", "estabelecimentos"])
+    mnt.add_argument("--runs", type=int, default=3)
+    mnt.add_argument("--zorder", nargs="*", default=[], help="Z-order silver estabelecimentos")
+    mnt.add_argument(
+        "--retention-hours", type=float, default=float(maintenance.DEFAULT_RETENTION_HOURS)
+    )
+    mnt.add_argument("--out", type=Path, default=Path("build/benchmark/maintenance"))
     return parser.parse_args(argv)
 
 
@@ -311,6 +558,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.runs < 1:
             raise SystemExit("--runs must be >= 1")
         return cmd_run(args)
+    if args.command == "maintenance":
+        return cmd_maintenance(args)
     return cmd_ui(args)
 
 

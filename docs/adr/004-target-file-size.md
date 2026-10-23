@@ -32,3 +32,7 @@ There are two ways to steer file size: at write time (`repartition(n)` / `coales
 - At the sample volume the silver files stay below the target after a load (a few files of tens of MiB); `OPTIMIZE` (6.3) compacts them and its effect on the read time is measured there.
 - No write path has a hard-coded partition count; scaling to the full release changes only the AQE-coalesced partition count.
 - The bronze partitions with many small files are compacted by the same `OPTIMIZE` (6.3).
+
+## Note (2026-10-22, task 6.3)
+
+Measured in the [benchmark](../benchmark.md#optimize-and-vacuum-task-63) (run 39864257683, 25% sample): `OPTIMIZE` with `maxFileSize` = `minFileSize` = 128 MiB took the bronze partitions from 3–12 and 8–9 files to **1 file per partition**, silver `empresas` from 5 files to 1 and silver `estabelecimentos` from 13 files (12.9 MiB) to 2 (84 MiB), with identical fingerprints; the silver read workload went from 4.37 s to 2.89 s (−34%). At this volume every partition is smaller than 128 MiB, so the target acts as the cap of a bin and no file reaches it; at the full release (~40x) the same setting yields files of about 128 MiB. Z-order and the `VACUUM` retention are decided in [ADR 013](013-table-maintenance-and-vacuum-retention.md).

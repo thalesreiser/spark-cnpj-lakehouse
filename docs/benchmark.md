@@ -121,3 +121,64 @@ The remaining main-job time is mostly CPU of the silver typing (regular expressi
 
 Parquet and Delta are 2.3x smaller than CSV and 2–3x faster to query; Delta costs 1.7 s more per write and 0.1–0.2 s per query (transaction log) and brings `MERGE`, `replaceWhere`, time travel and atomic commits, so it stays the format of every layer.
 
+## OPTIMIZE and VACUUM (task 6.3)
+
+> **Status: measured.** `Benchmark` run [39864257683](https://github.com/thalesreiser/spark-cnpj-lakehouse/actions/runs/39864257683) on branch `feat/p2-6.3` (2026-10-22, Spark 3.5.9, Delta Lake 3.3.3, same inputs and runner type as above, AMD EPYC 7763). The new workflow step `scripts/benchmark.py maintenance` runs after the main job on the tables it left (bronze `2026-09` + `2026-10`, silver after the `MERGE`), in one Spark application: files per table and partition, a read workload on silver (median of 3) and the files Delta data skipping would read, **before** and **after** `OPTIMIZE` (compaction, then a Z-order trial on silver `estabelecimentos`), then `VACUUM`. The module is `cnpj_lakehouse.maintenance` (`make optimize`, `make vacuum`); decisions in [ADR 013](adr/013-table-maintenance-and-vacuum-retention.md). Full sheet: `maintenance/maintenance.md` / `.json` in the run artifact.
+
+### Files per table (subtasks 1 and 2)
+
+`OPTIMIZE` = `DeltaTable.optimize().executeCompaction()` with `spark.databricks.delta.optimize.maxFileSize` = `minFileSize` = 128 MiB ([ADR 004](adr/004-target-file-size.md)).
+
+| Table | Before | After compaction | Files removed → added | `OPTIMIZE` time |
+|---|---|---|---:|---:|
+| bronze/empresas | 15 files, 58.7 MiB, **3–12 per partition** | 2 files (avg 29.4 MiB), **1 per partition** | 15 → 2 | 7.6 s |
+| bronze/estabelecimentos | 17 files, 165.1 MiB, **8–9 per partition** | 2 files (avg 87.6 MiB), **1 per partition** | 17 → 2 | 20.1 s |
+| silver/empresas | 5 files, 102.0 MiB (avg 20.4 MiB) | **1 file** (102.1 MiB) | 5 → 1 | 5.5 s |
+| silver/estabelecimentos | 13 files, 167.3 MiB (avg 12.9 MiB) | **2 files** (avg 84.2 MiB) | 13 → 2 | 13.7 s |
+
+Files per partition dropped to 1 (bronze, 2 partitions each) and the silver tables went from 5 and 13 files to 1 and 2. Every bronze partition and silver `empresas` is smaller than 128 MiB, so it fits in one file: the target is the cap of a bin, and at the sample volume (25%) no file reaches it; silver `estabelecimentos` (167 MiB) splits into two bins below 128 MiB. Bronze `estabelecimentos` grew 6% (165.1 → 175.3 MiB): the rewritten files compress differently once the rows of many small files are concatenated; the silver tables changed by under 1%.
+
+### Read time before × after (subtask 4)
+
+Five reads on silver, each a new DataFrame from the Delta path, median of 3 (seconds):
+
+| Query | Before | After compaction | After Z-order (`uf`) |
+|---|---:|---:|---:|
+| establishments by UF and status (`groupBy`) | 0.76 | 0.35 | 0.36 |
+| active companies in SP (filter `uf`, distinct) | 1.00 | 0.63 | 0.49 |
+| establishments of one CNAE (filter) | 0.60 | 0.32 | 0.29 |
+| capital by company size (`empresas`) | 0.65 | 0.56 | 0.54 |
+| active establishments by size (join) | 1.36 | 1.03 | 0.90 |
+| **Total** | **4.37** | **2.89 (−34%)** | **2.58 (−41%)** |
+
+Compaction cut the read workload by a third: fewer files means fewer S3 requests, Parquet footers and Delta file actions per query (Spark already packed the small files into a few scan tasks through `maxPartitionBytes`, so the gain is per-file overhead, not parallelism). The reads are short (0.3–1.4 s) and sensitive to noise; the direction is the same in all five.
+
+### Z-order (subtask 2)
+
+Tried on silver `estabelecimentos` by `uf` (`executeZOrderBy("uf")`, 19.2 s, 2 → 1 file of 168.5 MiB: Z-order re-bins the whole table and does not honour `minFileSize`). Data skipping, measured as the live files whose per-file min/max of the column may hold the value (what the Delta file statistics let a query skip; both columns are among the 32 indexed ones):
+
+| Predicate | Before | After compaction | After Z-order |
+|---|---:|---:|---:|
+| `uf = 'SP'` | 13 / 13 files | 2 / 2 | 1 / 1 |
+| `cnae_fiscal_principal = '4781400'` | 13 / 13 | 2 / 2 | 1 / 1 |
+
+Before Z-order no file can be skipped (the rows are laid out by the `MERGE`, not by UF), and after it the table is one file, so there is nothing to skip either; the extra 0.31 s comes from 2 files becoming 1, not from skipping. **Not adopted** ([ADR 013](adr/013-table-maintenance-and-vacuum-retention.md)): gold reads the whole table, the UF/CNAE questions are answered by the gold tables, and Delta OSS Z-order rewrites every file on each run, i.e. one more full rewrite of silver after each monthly `MERGE`. `--zorder` stays available for a full-volume test.
+
+### VACUUM (subtask 3)
+
+`DeltaTable.vacuum(retentionHours)`. The run used 168 h; the module default is now **840 h (35 days)**, so the previous monthly load stays readable by time travel; below 168 h the module refuses, and Delta's retention check is never disabled ([ADR 013](adr/013-table-maintenance-and-vacuum-retention.md)).
+
+| Table | Files on storage before → after `VACUUM` | Deleted | Live files |
+|---|---:|---:|---:|
+| bronze/empresas | 17 → 17 | 0 | 2 |
+| bronze/estabelecimentos | 19 → 19 | 0 | 2 |
+| silver/empresas | 9 → 9 | 0 | 1 |
+| silver/estabelecimentos | 22 → 22 | 0 | 1 |
+
+Nothing is deleted, as intended: every replaced file is minutes old, inside the retention. The gap between files on storage and live files (e.g. 22 vs 1) is the price of time travel: the files of the versions before `OPTIMIZE` and before the `MERGE` are kept until they are older than the retention. The deletion itself is the same `vacuum` call the benchmark has used since 6.1 to undo its repetitions (0 h, on its throwaway tables), and `tests/test_maintenance.py` covers the guard and the kept versions.
+
+### Same results
+
+`OPTIMIZE` commits with `dataChange = false`. For the four tables the fingerprint (`table_fingerprint`: rows + order-independent SHA-256) after `OPTIMIZE` + Z-order + `VACUUM` is **identical** to the one before (bronze `empresas` 2,250,971 rows, bronze `estabelecimentos` 2,379,126, silver `empresas` 1,136,629, silver `estabelecimentos` 1,201,534), and the version before maintenance (bronze v1, silver v5) still reads back with `versionAsOf` and the same fingerprint; the step fails otherwise. The pipeline code is unchanged, so the silver fingerprints of the CI `bronze` job are the same as `main`'s.
+
+The main job of this run took 239.4 s (median), against 169.8 s and 187.5 s in the two 6.2 runs: this branch changes nothing in the main job, and this runner had the slower EPYC 7763 CPU (the 6.2 runs had an EPYC 9V74), the runner noise already noted above. The final before × after with Spark UI screenshots is task 6.4.
