@@ -36,3 +36,6 @@ Decided while tuning the main job ([benchmark](../benchmark.md)):
 - **Gold** tables are a few KB to about 1 MiB in total; one partition per UF would only create 27 tiny files per table.
 - **Bronze** keeps the partition by `competencia` (decisions 1-3 above, unchanged).
 
+## Note (2026-10-23, task 7.2): Z-order not adopted
+
+The note above mentions `OPTIMIZE ... ZORDER BY (uf)` as a way to sharpen data skipping in silver. Task 6.3 measured it and [ADR 013](013-table-maintenance-and-vacuum-retention.md) did not adopt it (no files skipped at this volume, full rewrite after every monthly `MERGE`); silver stays unpartitioned and compacted only. The bronze compaction and file size mentioned in the consequences were done in task 6.3 ([ADR 004](004-target-file-size.md)).
