@@ -8,7 +8,7 @@
 
 > A layered lakehouse (bronze → silver → gold) built with **Apache Spark** and **Delta Lake** on top of the Brazilian Federal Revenue Service (Receita Federal) CNPJ open data, with incremental loads, auditable history and a documented benchmark of the performance gain obtained through tuning.
 
-**Status:** 🚧 in progress · epic 2 of 7 (bronze ingestion)
+**Status:** 🚧 in progress · epic 7 of 7 (publication)
 
 ---
 
@@ -220,7 +220,7 @@ make reconcile COMPETENCIA=2026-09   # gold totals == silver recomputed independ
 
 Business questions (task 5.3): the manual **Gold analysis** workflow (`.github/workflows/gold-analysis.yml`, `workflow_dispatch` only) loads `lookups` + `Empresas1` + `Estabelecimentos1` by default (`files` input), runs bronze, silver and gold, exports small roll-ups of the gold tables (`scripts/gold_export.py`: counts by year/UF, CNAE, size, status x sector; no rows) and executes [`notebooks/02-business-questions.ipynb`](notebooks/02-business-questions.ipynb) on them (`pip install -e ".[notebooks]"`). To regenerate: `gh workflow run gold-analysis.yml -f competencia=2026-09`, download the `gold-analysis-<COMPETENCIA>` artifact and copy `notebooks/` over the repository. One `Estabelecimentos` file is a sample of the release, so only shares and rankings are meaningful.
 
-Performance baseline (RF-08, task 6.1): the manual `Benchmark` workflow runs the **main job** (the monthly silver `MERGE` + gold) 3 times on a real release subset and records the median time, shuffle, spill, tasks and files per table, read from Spark event logs (`SPARK_EVENT_LOG_DIR`, parsed by `cnpj_lakehouse.benchmark`); the Spark UI of the median run is rebuilt by a History Server and uploaded with the event logs. `make benchmark BENCH_ARGS="--next 2026-10 --merge-tables empresas"` runs it on the local stack (after `make bronze` and `scripts/silver_next_month.py`). Tuning (task 6.2) took the main job from 459.7 s to 169.8 s (−63.1%, same results); what each change did is in the same page. Results and method: [`docs/benchmark.md`](docs/benchmark.md).
+Performance baseline (RF-08, task 6.1): the manual `Benchmark` workflow runs the **main job** (the monthly silver `MERGE` + gold) 3 times on a real release subset and records the median time, shuffle, spill, tasks and files per table, read from Spark event logs (`SPARK_EVENT_LOG_DIR`, parsed by `cnpj_lakehouse.benchmark`); the Spark UI of the median run is rebuilt by a History Server and uploaded with the event logs. `make benchmark BENCH_ARGS="--next 2026-10 --merge-tables empresas"` runs it on the local stack (after `make bronze` and `scripts/silver_next_month.py`). Tuning (task 6.2) and the same-runner comparison (task 6.4) took the main job from 481.9 s to 240.6 s (−50.1%, identical tables, run 39975706499); the earlier 459.7 s → 169.8 s (−63.1%) mixed two runner CPU models and is kept there only as history. What each change did is in the same page. Results and method: [`docs/benchmark.md`](docs/benchmark.md).
 
 Table maintenance (RF-07, task 6.3): `make optimize` (`python -m cnpj_lakehouse.maintenance optimize`: compaction of the large tables of `LAYER`, default silver, to ~128 MiB files, [ADR 004](docs/adr/004-target-file-size.md); `MAINT_ARGS="--where \"competencia = '2026-10'\""` limits bronze to one month) and `make vacuum` (`RETENTION_HOURS`, default 840 h = 35 days so the previous monthly version stays readable by time travel; refused below 168 h, [ADR 013](docs/adr/013-table-maintenance-and-vacuum-retention.md)). Both write a JSON summary of files and bytes to `build/`. On the benchmark sample, compaction took the bronze partitions from up to 12 files to 1 and silver from 5/13 files to 1/2, and the silver read workload from 4.37 s to 2.89 s (−34%), with identical fingerprints.
 
@@ -247,8 +247,8 @@ For development: `make install` (dependencies + pre-commit hooks), `make lint` a
 | 3. Silver and quality | Normalization, deduplication, tests, quality checks | 10 h | 🚧 |
 | 4. Incremental and history | MERGE, idempotency, time travel | 7 h | ⬜ |
 | 5. Gold and analysis | Aggregations, reconciliation, notebook | 5 h | 🚧 |
-| 6. Optimization and benchmark | Baseline, tuning, OPTIMIZE/VACUUM, `benchmark.md` | 9 h | ⬜ |
-| 7. Publication | CI, diagrams, ADRs, traceability, final README | 5 h | ⬜ |
+| 6. Optimization and benchmark | Baseline, tuning, OPTIMIZE/VACUUM, `benchmark.md` | 9 h | ✅ |
+| 7. Publication | CI, diagrams, ADRs, traceability, final README | 5 h | 🚧 |
 
 ## Measured results
 
