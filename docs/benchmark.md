@@ -4,6 +4,92 @@ Baseline of the main job before any tuning (task 6.1). The tuning itself is task
 
 > **Status: measured.** Baseline from the `Benchmark` run [39447843930](https://github.com/thalesreiser/spark-cnpj-lakehouse/actions/runs/39447843930) on `main` (2026-10-20, Spark 3.5.3, median of 3 repetitions). The full sheet, the event logs and the Spark UI pages are in its `benchmark-2026-09` artifact.
 
+> **Final result (task 6.4):** on one runner and one CPU, the main job went from **481.9 s to 240.6 s (−50.1%)** with identical silver and gold tables — see [Before × after (task 6.4)](#before--after-task-64) right below. The sections after it (baseline 6.1, tuning 6.2, `OPTIMIZE`/`VACUUM` 6.3) are kept as the history of the work.
+
+## Before × after (task 6.4)
+
+> **Status: measured.** `Benchmark` run [39975706499](https://github.com/thalesreiser/spark-cnpj-lakehouse/actions/runs/39975706499) on branch `feat/p2-6.4` (2026-10-23, Spark 3.5.9, Delta Lake 3.3.3, runner CPU **AMD EPYC 7763**, 4 vCPU). The full sheet is `compare/compare.md` / `.json` in its `benchmark-2026-09` artifact, next to both sets of event logs and Spark UI pages.
+
+**Why a new run.** The 6.1/6.2/6.3 numbers came from different jobs, and GitHub assigned two CPU models (EPYC 7763 for the baselines and 6.3, EPYC 9V74 for the 6.2 runs), so "459.7 s → 169.8 s" mixed the tuning with a faster CPU. This run measures **both codes in the same job, on the same runner, with the same data**:
+
+- **Before** = commit [`e1dcb45`](https://github.com/thalesreiser/spark-cnpj-lakehouse/commit/e1dcb4535a8b9126e2288bf95f140c1c30a12c6a), the last commit before the 6.2 tuning (Spark 3.5.9, `spark.executor.memory=1g`, AQE on, everything else at the defaults). The workflow checks it out into `build/compare-code` and `scripts/benchmark.py run --code build/compare-code --step-env SPARK_EXECUTOR_MEMORY=1g --prefix benchmark-baseline` runs the measured steps with that checkout's `src/` on `PYTHONPATH` (the Spark image is the same: the workflow fails if `pyproject.toml`, `infra/spark` or `versions.py` differ). The event logs confirm it: the `first()` stage is `at /opt/app/build/compare-code/src/cnpj_lakehouse/silver.py:326` and the properties are the pre-tuning ones.
+- **After** = the current code (6.2 tuning; the main job is unchanged by 6.3), then the 6.3 maintenance step (`OPTIMIZE` + Z-order trial + `VACUUM`) on its tables.
+- Same inputs for both: release `2026-09`, files `lookups Empresas1 Estabelecimentos1`, bronze sample 0.25 (loaded once, read by both), synthetic `2026-10`, median of 3 repetitions each, same cluster (1 worker, 2 cores, 2 GB). Before ran first, then after.
+- **Same results asserted:** `scripts/benchmark.py compare` fingerprints (rows + order-independent SHA-256, `cnpj_lakehouse.fingerprint`) the 8 silver tables and the 3 gold tables of the median run of each side and fails the job if any differs. All 11 are **identical** (silver `empresas` 1,136,629 rows, `estabelecimentos` 1,201,534; gold `gold_empresas_cnae_uf_ano` 205,019).
+
+### Same-runner table
+
+| Metric (median of 3) | Before (`e1dcb45`) | After (6.2 + 6.3) | Change |
+|---|---:|---:|---:|
+| **Main job (silver `MERGE` + gold), wall** | **481.9 s** | **240.6 s** | **−50.1%** |
+| silver `MERGE`, wall | 417.2 s | 184.7 s | −55.7% |
+| gold, wall | 64.7 s | 53.7 s | −17.0% |
+| Initial silver load (setup, 1 run), wall | 373.6 s | 166.3 s | −55.5% |
+| Main job tasks (silver `MERGE` + gold) | 1,980 (906 + 1,074) | 368 (214 + 154) | −81.4% |
+| Main job stages | 133 | 133 | = |
+| Shuffle read / write | 1.6 / 1.6 GiB | 1.6 / 1.6 GiB | = |
+| Spill (memory) | 900.0 MiB | 704.0 MiB | −21.8% |
+| Spill (disk) | 397.5 MiB | 328.3 MiB | −17.4% |
+| Executor run time / GC | 767.7 / 21.3 s | 344.1 / 6.0 s | −55.2% / −71.8% |
+| Max task skew (max / median) | 17.27x | 69.62x | see diagnosis |
+| Longest `MERGE` stage (source materialization: typing, row hash, window) | 165.8 s, 3 tasks | 59.6 s, 8 tasks | −64.1% |
+| Quality-counts `first()` of `estabelecimentos` | 131.6 s, 3 tasks | 22.2 s, 8 tasks | −83.1% |
+| Main job per repetition | 481.9 / 485.7 / 463.0 s | 232.5 / 240.6 / 241.4 s | spread < 5% |
+
+Files per table (live files; the main job writes the same files with both codes, `OPTIMIZE` is the 6.3 step run on the after tables):
+
+| Table | Before (after the main job) | After the main job | After `OPTIMIZE` (+ Z-order trial) |
+|---|---|---|---|
+| bronze/empresas (shared input) | 15 files, 3–12 per partition | same | 2 files, **1 per partition** |
+| bronze/estabelecimentos (shared input) | 17 files, 8–9 per partition | same | 2 files, **1 per partition** |
+| silver/empresas | 5 files (avg 20.4 MiB) | 5 files (avg 20.4 MiB) | **1 file** |
+| silver/estabelecimentos | 13 files (avg 12.9 MiB) | 13 files (avg 12.9 MiB) | 2 files after compaction, 1 after the Z-order trial |
+| gold (3 tables) | 2 / 1 / 1 files | 2 / 1 / 1 files | not compacted (KB tables) |
+
+Read workload on silver (the five 6.3 queries, median of 3, measured in one Spark session on both silver copies: before = the table as the pre-tuning code wrote it, after = the current table after `OPTIMIZE`):
+
+| Query | Before | After | Change |
+|---|---:|---:|---:|
+| establishments by UF and status | 0.66 s | 0.36 s | −45.5% |
+| active companies in SP (filter `uf`) | 1.08 s | 0.49 s | −54.6% |
+| establishments of one CNAE (filter) | 0.59 s | 0.28 s | −52.5% |
+| capital by company size | 0.62 s | 0.55 s | −11.3% |
+| active establishments by size (join) | 1.32 s | 0.89 s | −32.6% |
+| **Total** | **4.27 s** | **2.57 s** | **−39.8%** |
+
+### Spark UI (History Server over the event logs, median repetition of the silver `MERGE`)
+
+Rendered headlessly in the same job (`scripts/spark_ui_screenshots.py`: a Spark History Server in the `spark-client` image, Chromium through Playwright, palette PNGs). The Spark UI shows plans, metrics, timestamps, container addresses and code paths, never rows; each image was reviewed before committing.
+
+**Jobs list** — before: the `first at …/compare-code/…/silver.py:326` job takes 2.2 min and `MERGE operation - materialize source` 2.8 min, each with 3 tasks; Delta snapshot jobs run 50 tasks each. After: the same jobs are seconds to under a minute, and the snapshot jobs run 4 tasks.
+
+![Spark UI jobs list of the silver MERGE before the tuning](img/benchmark/before-jobs.png)
+![Spark UI jobs list of the silver MERGE after the tuning](img/benchmark/after-jobs.png)
+
+**Longest stage of the `MERGE`** (source materialization of `estabelecimentos`) — before: stage 68, 3 tasks, two of them 2.4–2.8 min, 5.3 min of task time, 400 MiB / 190 MiB spill. After: stage 74, 8 tasks (16 MB input splits), the two large ones 54–58 s, 2.0 min of task time; same 353 MiB shuffle write; spill 704 / 328 MiB (the window sort of the two ~40 MB files of the synthetic month).
+
+![Spark UI longest MERGE stage before the tuning](img/benchmark/before-stage.png)
+![Spark UI longest MERGE stage after the tuning](img/benchmark/after-stage.png)
+
+**SQL page of the longest query** (`Execute MergeIntoCommand` of silver `empresas`): identical operation metrics (11,177 rows updated, 11,127 inserted, 1,114,325 rewritten unmodified, 3 files removed, 5 added) — the same `MERGE` result — in 44.2 s before and 34.8 s after (materialize source 27.0 → 19.5 s).
+
+![Spark UI SQL page of the MERGE before the tuning](img/benchmark/before-sql.png)
+![Spark UI SQL page of the MERGE after the tuning](img/benchmark/after-sql.png)
+
+**Executors** — one executor with 2 cores in both; before 906 tasks, 1 GB executor memory; after 214 tasks, 1.5 GB (741.6 MiB of storage memory), 1.5 GiB shuffle read and write in both.
+
+![Spark UI executors page before the tuning](img/benchmark/before-executors.png)
+![Spark UI executors page after the tuning](img/benchmark/after-executors.png)
+
+### Diagnosis (R-P2-02)
+
+- **Target met on the same hardware: −50.1% for the main job**, above the 30% of RNF-01, with identical tables. The 6.2 figure of −63.1% (459.7 → 169.8 s) overstated the gain: it compared an EPYC 7763 baseline with an EPYC 9V74 tuned run. On the 7763, the tuned code takes 240.6 s here and 239.4 s in the 6.3 run (same CPU, a different job: within 1%), and the pre-tuning code 481.9 s here against 459.7 s and 460.6 s in the 6.1/6.2 baselines (+5%, runner noise between jobs). Roughly, the CPU explains a 1.4x factor (240 s vs 170 s for the same code) and the tuning a 2x factor.
+- **What moved the needle:** the CNPJ check digits computed over a helper root column. It removed the 12-fold re-evaluation of the key normalizers and the codegen fallback, and is most of the drop of the two heaviest stages (`first()` 131.6 → 22.2 s, source materialization 165.8 → 59.6 s) and of the executor time (−55%). The 16 MB input splits of silver spread those stages over 8 tasks instead of 3, and the initial load improved as much as the `MERGE` (−55.5%). Delta snapshot partitions 50 → 4 turned the log-replay jobs from 50 tasks into 4: most of the 1,612 fewer tasks (−81%) and of the gold gain. The 1.5 GB executor memory cut GC by 72% and spill by about a fifth. For reads, `OPTIMIZE` (6.3) took the silver files from 5/13 to 1–2 and the read workload from 4.27 to 2.57 s (−40%).
+- **What did not move:** shuffle volume (1.6 GiB, the `MERGE` window and join are the same plan), the number of stages (133) and the files written by the main job (the file count follows the input, by design, [ADR 004](adr/004-target-file-size.md)). Gold gained only 17% on this CPU (against 36% on the 9V74): it is ~50 s of short Delta log and JVM work, where task count was not the bottleneck. The Z-order trial gave no data skipping at the sample size (one file; not adopted, [ADR 013](adr/013-table-maintenance-and-vacuum-retention.md)).
+- **Remaining bottlenecks:** the source materialization of the `estabelecimentos` `MERGE` is still 60 s, dominated by two tasks of ~55 s that read the two large files of the synthetic month (one row group each) and spill in the window sort — the 69.6x skew ratio is those two tasks against six tiny ones, not idle cores (both run in parallel on the 2 cores). The rest of the `MERGE` is many short stages (Delta snapshots, file scans, commits) and 2–3 s of JVM start per step. CPU of the typing (regular expressions, SHA-256 row hash) is the floor on 2 executor cores.
+- **What would come next:** write the synthetic next month (and the bronze months) in files of several row groups, or repartition the `MERGE` source by the business key, so the window sort runs as more, smaller tasks with no spill; restrict the `MERGE` target scan with a partition or a file-level predicate once silver is large; reuse one Spark application for silver and gold (no second JVM and Delta snapshot rebuild); run `OPTIMIZE` monthly after the `MERGE` (6.3). At full volume (not sampled) the same changes should hold, but the numbers here are for the 25% sample of two of the ten files.
+- **Limits of this measurement:** one runner and 3 repetitions per side; before always ran first (no interleaving), so slow drift of the runner during the job would favour one side — the per-repetition spread is under 5% on both sides, far below the 50% difference. Reads are sub-second and noisier.
+
 ## Main job and reference volume
 
 - **Main job: the monthly incremental load, silver `MERGE` + gold.** It runs every month in production and holds the widest operations of the pipeline: the deduplication window, the row hash and the `MERGE` by business key in silver ([ADR 011](adr/011-silver-current-state-merge.md)), then the joins and aggregations of gold ([ADR 012](adr/012-gold-aggregations-and-counting-rules.md)). Bronze is a plain CSV → Delta copy and is left out.

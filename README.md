@@ -252,14 +252,16 @@ For development: `make install` (dependencies + pre-commit hooks), `make lint` a
 
 ## Measured results
 
-_To be published at the end of epic 6 in [`docs/benchmark.md`](docs/benchmark.md), including the actual result even if the 30% target is not reached._
+**Main job (silver `MERGE` + gold): 481.9 s → 240.6 s (−50.1%) with identical silver and gold tables**, both codes measured in the same `Benchmark` run on the same runner (AMD EPYC 7763, run [39975706499](https://github.com/thalesreiser/spark-cnpj-lakehouse/actions/runs/39975706499), 25% sample of `Empresas1` + `Estabelecimentos1`, median of 3). Table, Spark UI screenshots and diagnosis: [`docs/benchmark.md`](docs/benchmark.md#before--after-task-64).
 
-| Metric | Baseline | After tuning | Change |
+| Metric | Before tuning (`e1dcb45`) | After (6.2 + 6.3) | Change |
 |---|---|---|---|
-| Main job runtime | — | — | — |
-| Shuffle | — | — | — |
-| Spill | — | — | — |
-| Files per partition | — | — | — |
+| Main job runtime | 481.9 s | 240.6 s | −50.1% |
+| Tasks | 1,980 | 368 | −81.4% |
+| Shuffle read / write | 1.6 / 1.6 GiB | 1.6 / 1.6 GiB | = |
+| Spill (memory / disk) | 900.0 / 397.5 MiB | 704.0 / 328.3 MiB | −22% / −17% |
+| Files per partition (bronze, after `OPTIMIZE`) | 3–12 | 1 | — |
+| Silver read workload (5 queries) | 4.27 s | 2.57 s | −39.8% |
 
 ## Documentation
 
