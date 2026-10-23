@@ -260,3 +260,62 @@ def test_render_formats_markdown() -> None:
     assert lines[2].startswith("| Format | Write | Size | Files | `count`")
     assert lines[4] == "| csv | 12.3 s | 3.0 MiB | 4 | 1.0 s | 1.0 s | 1.0 s |"
     assert lines[5] == "| delta | 5.0 s | 1.0 KiB | 2 | 0.0 s | 0.0 s | 0.0 s |"
+
+
+def test_pct_change() -> None:
+    from cnpj_lakehouse.benchmark import pct_change
+
+    assert pct_change(200, 50) == "\N{MINUS SIGN}75.0%"
+    assert pct_change(10, 11) == "+10.0%"
+    assert pct_change(0, 0) == "=" and pct_change(0, 3) == "n/a"
+
+
+def test_render_comparison_same_runner_sheet() -> None:
+    from cnpj_lakehouse.benchmark import render_comparison
+
+    before = {
+        "summary": summarize([_run(300, 100)], ["silver_merge", "gold"]),
+        "setup": {"silver_initial": {"wall_s": 120.0}},
+        "files": {
+            "bronze/empresas": file_stats(2, 2048, {}),
+            "silver/empresas": file_stats(8, 8192, {"uf=SP": 5, "uf=RJ": 3}),
+        },
+    }
+    after = {
+        "summary": summarize([_run(100, 50)], ["silver_merge", "gold"]),
+        "setup": {"silver_initial": {"wall_s": 60.0}},
+        "files": {"silver/empresas": file_stats(2, 8192, {"uf=SP": 1, "uf=RJ": 1})},
+    }
+    fp = {"rows": 10, "digest": "abc"}
+    reads = {
+        side: {
+            "reads": {"q1": {"median_s": total}},
+            "reads_total_s": total,
+            "skipping": {"t.c = 'x'": {"may_match": hit, "files": 8}},
+        }
+        for side, total, hit in (("before", 4.0, 8), ("after", 1.0, 1))
+    }
+    md = render_comparison(
+        before,
+        after,
+        {"silver/empresas": {"before": fp, "after": fp}, "gold/x": {"before": fp, "after": {}}},
+        reads,
+        {"CPU": "EPYC"},
+    )
+    lines = md.splitlines()
+    assert lines[0] == "# Before × after on the same runner (task 6.4)"
+    assert "- CPU: EPYC" in lines
+    minus = "\N{MINUS SIGN}"
+    assert f"| Main job (silver MERGE + gold), wall | 400.0 s | 150.0 s | {minus}62.5% |" in lines
+    setup = "| Initial silver load (setup, 1 run), wall | 120.0 s | 60.0 s |"
+    assert f"{setup} {minus}50.0% |" in lines
+    assert "| Main job spill (disk) | 0 B | 0 B | = |" in lines
+    row = "| silver/empresas | 8 (1.0 KiB avg; 3–5/partition) | 2 (4.0 KiB avg; 1/partition) |"
+    assert f"{row} {minus}75.0% |" in lines
+    assert not any(line.startswith("| bronze/") for line in lines)
+    assert f"| **Total** | **4.00** | **1.00** | **{minus}75.0%** |" in lines
+    assert "| `t.c = 'x'` | 8 / 8 | 1 / 8 |" in lines
+    assert "- silver/empresas: fingerprint identical (10 rows)" in lines
+    assert "- gold/x: fingerprint DIFFERENT (? rows)" in lines
+    minimal = render_comparison(before, {**after, "files": {}}, {})
+    assert "Read workload" not in minimal and "| silver/empresas | 8 (" in minimal

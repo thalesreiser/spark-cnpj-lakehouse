@@ -3,6 +3,9 @@ name: Benchmark
 # release subset. Manual only: it downloads ~450 MB and runs the job 3 times (Actions minutes are
 # limited). Publishes metrics, Spark event logs and the Spark UI pages rebuilt by a History
 # Server as artifacts; metadata only, never rows (RST-01).
+# Task 6.4: the same job also measures `compare_ref` (the code before the task 6.2 tuning) with
+# the same data and inputs, asserts that both produce identical tables and renders Spark UI
+# screenshots of both, so the before x after comparison runs on one runner (one CPU model).
 on:
   workflow_dispatch:
     inputs:
@@ -27,6 +30,9 @@ on:
       zorder:
         description: "Z-order columns tried on silver estabelecimentos in the OPTIMIZE step (task 6.3)"
         default: "uf"
+      compare_ref:
+        description: "Commit measured as 'before' in the same job (empty = skip); default = before task 6.2"
+        default: "e1dcb4535a8b9126e2288bf95f140c1c30a12c6a"
 
 permissions:
   contents: read
@@ -34,7 +40,7 @@ permissions:
 jobs:
   benchmark:
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 330
     env:
       # Local-development/CI credentials only (ephemeral containers); they are not secrets.
       MINIO_ROOT_USER: minioadmin
@@ -48,9 +54,29 @@ jobs:
       # run of the main job takes ~30 min and the shuffle files fill the runner disk.
       SPARK_SAMPLE_FRACTION: ${{ inputs.sample_fraction || '0.25' }}
       ZORDER: ${{ inputs.zorder || 'uf' }}
+      COMPARE_REF: ${{ inputs.compare_ref }}
+      # Executor memory of the compare_ref code (compose default before task 6.2).
+      COMPARE_EXECUTOR_MEMORY: 1g
       CLIENT: docker compose -f infra/docker-compose.yml --profile client run --rm spark-client
     steps:
       - uses: actions/checkout@v7
+      # build/ is ignored by git and docker: this checkout does not enter the Spark image.
+      - name: Check out compare_ref (the 'before' code)
+        if: env.COMPARE_REF != ''
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.COMPARE_REF }}
+          path: build/compare-code
+          persist-credentials: false
+      - name: Same Spark image for both (dependencies, jars and Dockerfile unchanged)
+        if: env.COMPARE_REF != ''
+        run: |
+          for f in pyproject.toml infra/spark src/cnpj_lakehouse/versions.py; do
+            diff -r "$f" "build/compare-code/$f" || {
+              echo "::error::$f differs in $COMPARE_REF: the before run would need its own image"
+              exit 1
+            }
+          done
       - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
@@ -89,6 +115,17 @@ jobs:
             $CLIENT python scripts/silver_next_month.py --source "$COMPETENCIA" --target "$NEXT" \
               --table "$table" --column "$column" --out "build/benchmark-next-$table.json"
           done
+      - name: Benchmark of compare_ref (before; same data, inputs and image)
+        if: env.COMPARE_REF != ''
+        run: |
+          $CLIENT python scripts/benchmark.py run --competencia "$COMPETENCIA" --next "$NEXT" \
+            --merge-tables $MERGE_TABLES --runs "$RUNS" --out build/benchmark-baseline \
+            --prefix benchmark-baseline --code build/compare-code \
+            --step-env "SPARK_EXECUTOR_MEMORY=$COMPARE_EXECUTOR_MEMORY" \
+            --info "runner=GitHub-hosted ubuntu-latest ${ImageOS:-} ${ImageVersion:-}" \
+            "code=$COMPARE_REF (before)" "files=$FILES" "sample=$SPARK_SAMPLE_FRACTION"
+          { echo "## Before ($COMPARE_REF)"; cat build/benchmark-baseline/benchmark.md; } \
+            >> "$GITHUB_STEP_SUMMARY"
       - name: Benchmark (main job x RUNS, event logs on)
         run: |
           $CLIENT python scripts/benchmark.py run --competencia "$COMPETENCIA" --next "$NEXT" \
@@ -98,7 +135,11 @@ jobs:
             "files=$FILES" "sample=$SPARK_SAMPLE_FRACTION"
           cat build/benchmark/benchmark.md >> "$GITHUB_STEP_SUMMARY"
       - name: Spark UI evidence (History Server over the event logs of the median run)
-        run: $CLIENT python scripts/benchmark.py ui --out build/benchmark
+        run: |
+          $CLIENT python scripts/benchmark.py ui --out build/benchmark
+          if [ -n "$COMPARE_REF" ]; then
+            $CLIENT python scripts/benchmark.py ui --out build/benchmark-baseline
+          fi
       - name: Storage formats (ADR 001, CSV x Parquet x Delta of one bronze month)
         if: contains(env.MERGE_TABLES, 'estabelecimentos')
         run: |
@@ -110,6 +151,35 @@ jobs:
           $CLIENT python scripts/benchmark.py maintenance --merge-tables $MERGE_TABLES \
             --runs "$RUNS" --zorder $ZORDER --out build/benchmark/maintenance
           cat build/benchmark/maintenance/maintenance.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Spark UI screenshots (History Server + headless Chromium, task 6.4)
+        if: env.COMPARE_REF != ''
+        continue-on-error: true
+        env:
+          SPARK_HISTORY_OPTS: >-
+            -Dspark.history.fs.logDirectory=file:/opt/app/build/ui-logs
+            -Dspark.history.ui.port=18080
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" build
+          python scripts/spark_ui_screenshots.py logs --logs build/ui-logs \
+            --bench before=build/benchmark-baseline after=build/benchmark
+          docker compose -f infra/docker-compose.yml --profile client run -d \
+            --name spark-history -p 127.0.0.1:18080:18080 -e SPARK_HISTORY_OPTS \
+            spark-client spark-class org.apache.spark.deploy.history.HistoryServer
+          # Screenshot tooling for this job only (not a project dependency).
+          pip install playwright==1.47.0 pillow==10.4.0
+          python -m playwright install --with-deps chromium
+          python scripts/spark_ui_screenshots.py shoot --logs build/ui-logs \
+            --out build/benchmark/screenshots
+          docker stop spark-history
+      # Last: fails the job unless both codes produced identical silver and gold tables.
+      - name: Before x after on this runner (same results asserted, task 6.4)
+        if: env.COMPARE_REF != ''
+        run: |
+          $CLIENT python scripts/benchmark.py compare --before build/benchmark-baseline \
+            --before-prefix benchmark-baseline --after build/benchmark --runs "$RUNS" \
+            --out build/benchmark/compare --info "before=$COMPARE_REF" "after=$GITHUB_SHA" \
+            "run=$GITHUB_RUN_ID" "sample=$SPARK_SAMPLE_FRACTION" "files=$FILES"
+          cat build/benchmark/compare/compare.md >> "$GITHUB_STEP_SUMMARY"
       - name: Make the outputs readable (written by root in the containers)
         if: always()
         run: sudo chmod -R a+rX build || true
@@ -120,6 +190,7 @@ jobs:
           name: benchmark-${{ inputs.competencia || '2026-09' }}
           path: |
             build/benchmark/
+            build/benchmark-baseline/
             build/benchmark-next-*.json
           retention-days: 90
           if-no-files-found: warn
