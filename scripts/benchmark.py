@@ -27,6 +27,12 @@ and after ``OPTIMIZE`` (compaction, then an optional Z-order of silver ``estabel
 ``VACUUM`` with the ADR 013 retention; the fingerprints before and after must be equal. Output:
 ``<out>/maintenance.json`` and ``<out>/maintenance.md``.
 
+``compare`` (task 6.4) puts two ``run`` results measured in the same job side by side (e.g. the
+code before the task 6.2 tuning, run with ``run --code <checkout> --prefix benchmark-baseline``,
+and the current code): it fails unless the silver tables and the gold tables of the median runs
+have identical fingerprints, measures the read workload on both silver copies and writes
+``<out>/compare.json`` and ``<out>/compare.md``.
+
 ``ui`` rebuilds the Spark UI of the median run from the event logs with a Spark History Server
 and saves its REST API JSON and the server-rendered jobs/stages/SQL pages to ``<out>/spark-ui``.
 
@@ -35,6 +41,8 @@ and saves its REST API JSON and the server-rendered jobs/stages/SQL pages to ``<
     python scripts/benchmark.py ui --out build/benchmark
     python scripts/benchmark.py maintenance --merge-tables empresas estabelecimentos \
         --zorder uf --out build/benchmark/maintenance
+    python scripts/benchmark.py compare --before build/benchmark-baseline \
+        --before-prefix benchmark-baseline --after build/benchmark --out build/benchmark/compare
 """
 
 from __future__ import annotations
@@ -183,7 +191,14 @@ def cmd_run(args: argparse.Namespace) -> int:
     logs = out / "eventlogs"
     logs.mkdir(parents=True, exist_ok=True)
     env = {**os.environ, "SPARK_EVENT_LOG_DIR": logs.as_uri()}
-    silver = cfg.path("benchmark", "silver")
+    if args.code:
+        # Measured steps run the pipeline code of another checkout (task 6.4); the harness and
+        # its helpers (reset, DESCRIBE DETAIL) keep running the current code.
+        env["PYTHONPATH"] = str((args.code / "src").resolve())
+    for item in args.step_env:
+        key, _, value = item.partition("=")
+        env[key] = value
+    silver = cfg.path(args.prefix, "silver")
     setup_dir = out / "setup"
     setup_dir.mkdir(parents=True, exist_ok=True)
     wall, app, log_file = run_step(
@@ -201,7 +216,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             reset_silver(cfg, merged)
         run_dir = out / f"run-{i}"
         run_dir.mkdir(parents=True, exist_ok=True)
-        gold = cfg.path("benchmark", f"run-{i}", "gold")
+        gold = cfg.path(args.prefix, f"run-{i}", "gold")
         commands = {
             "silver_merge": _silver(args, args.next, silver, run_dir / "silver-merge.json"),
             "gold": _gold(args, silver, gold, run_dir / "gold.json"),
@@ -469,7 +484,7 @@ def cmd_maintenance(args: argparse.Namespace) -> int:
     from delta.tables import DeltaTable
 
     cfg = LakehouseConfig.from_env(os.environ)
-    silver = cfg.path("benchmark", "silver")
+    silver = cfg.path(args.prefix, "silver")
     tables = {f"bronze/{t}": cfg.path(BRONZE_LAYER, t) for t in args.merge_tables}
     tables |= {f"silver/{t}": f"{silver}/{t}" for t in args.merge_tables}
     with_reads = {"empresas", "estabelecimentos"} <= set(args.merge_tables)
@@ -528,6 +543,74 @@ def cmd_maintenance(args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def _compared_tables(cfg: LakehouseConfig, prefix: str, result_dir: Path) -> dict[str, str]:
+    """Silver tables of a ``run`` and the gold tables of its median run (name -> path)."""
+    result = json.loads((result_dir / "benchmark.json").read_text(encoding="utf-8"))
+    initial = json.loads((result_dir / "setup" / "silver-initial.json").read_text(encoding="utf-8"))
+    median_dir = result_dir / f"run-{result['summary']['median_run'] + 1}"
+    gold = json.loads((median_dir / "gold.json").read_text(encoding="utf-8"))
+    silver = cfg.path(prefix, "silver")
+    tables = {f"silver/{t['table']}": f"{silver}/{t['table']}" for t in initial["tables"]}
+    tables |= {f"gold/{t['table']}": t["path"] for t in gold["tables"]}
+    return tables
+
+
+def _cpu_model() -> str:
+    try:
+        for line in Path("/proc/cpuinfo").read_text(encoding="utf-8").splitlines():
+            if line.startswith("model name"):
+                return line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return "unknown"
+
+
+def cmd_compare(args: argparse.Namespace) -> int:
+    from cnpj_lakehouse.benchmark import render_comparison
+
+    cfg = LakehouseConfig.from_env(os.environ)
+    results = {
+        side: json.loads((d / "benchmark.json").read_text(encoding="utf-8"))
+        for side, d in (("before", args.before), ("after", args.after))
+    }
+    before = _compared_tables(cfg, args.before_prefix, args.before)
+    after = _compared_tables(cfg, args.after_prefix, args.after)
+    spark = get_spark("benchmark-compare", cfg)
+    try:
+
+        def fingerprint(path: str | None) -> dict[str, Any]:
+            if path is None:
+                return {}
+            return dict(table_fingerprint(spark.read.format("delta").load(path)).as_dict())
+
+        checks = {
+            name: {"before": fingerprint(before.get(name)), "after": fingerprint(after.get(name))}
+            for name in dict.fromkeys([*before, *after])
+        }
+        reads = None
+        if {"silver/empresas", "silver/estabelecimentos"} <= set(before) & set(after):
+            # Same session and queries on both silver copies, before first (task 6.3 workload).
+            reads = {
+                side: _state(spark, {}, cfg.path(prefix, "silver"), args.runs, True)
+                for side, prefix in (("before", args.before_prefix), ("after", args.after_prefix))
+            }
+    finally:
+        spark.stop()
+    info = {"CPU": _cpu_model(), "CPUs": str(os.cpu_count())}
+    for item in args.info:
+        key, _, value = item.partition("=")
+        info[key] = value
+    out: Path = args.out
+    out.mkdir(parents=True, exist_ok=True)
+    payload = {"info": info, "checks": checks, "reads": reads, **results}
+    (out / "compare.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    markdown = render_comparison(results["before"], results["after"], checks, reads, info)
+    (out / "compare.md").write_text(markdown, encoding="utf-8")
+    print(markdown)
+    same = all(c["before"] and c["before"] == c["after"] for c in checks.values())
+    return 0 if same else 1
+
+
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="python scripts/benchmark.py", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -538,6 +621,9 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     run.add_argument("--runs", type=int, default=3)
     run.add_argument("--info", nargs="*", default=[], help="extra KEY=VALUE environment notes")
     run.add_argument("--out", type=Path, default=Path("build/benchmark"))
+    run.add_argument("--prefix", default="benchmark", help="lakehouse prefix of the tables")
+    run.add_argument("--code", type=Path, help="checkout whose src/ the measured steps run")
+    run.add_argument("--step-env", nargs="*", default=[], help="KEY=VALUE for the steps only")
     ui = sub.add_parser("ui", help="save the Spark UI of the median run (History Server)")
     ui.add_argument("--out", type=Path, default=Path("build/benchmark"))
     ui.add_argument("--timeout", type=int, default=180)
@@ -549,6 +635,15 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         "--retention-hours", type=float, default=float(maintenance.DEFAULT_RETENTION_HOURS)
     )
     mnt.add_argument("--out", type=Path, default=Path("build/benchmark/maintenance"))
+    mnt.add_argument("--prefix", default="benchmark", help="lakehouse prefix of the tables")
+    cmp = sub.add_parser("compare", help="before x after of two runs; fails on different results")
+    cmp.add_argument("--before", type=Path, required=True, help="out dir of the before run")
+    cmp.add_argument("--after", type=Path, required=True, help="out dir of the after run")
+    cmp.add_argument("--before-prefix", default="benchmark-baseline")
+    cmp.add_argument("--after-prefix", default="benchmark")
+    cmp.add_argument("--runs", type=int, default=3, help="repetitions of each read query")
+    cmp.add_argument("--info", nargs="*", default=[], help="extra KEY=VALUE notes")
+    cmp.add_argument("--out", type=Path, default=Path("build/benchmark/compare"))
     return parser.parse_args(argv)
 
 
@@ -560,6 +655,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_run(args)
     if args.command == "maintenance":
         return cmd_maintenance(args)
+    if args.command == "compare":
+        return cmd_compare(args)
     return cmd_ui(args)
 
 

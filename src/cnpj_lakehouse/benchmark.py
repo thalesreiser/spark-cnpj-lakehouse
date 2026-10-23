@@ -421,3 +421,109 @@ def render_formats_markdown(source: str, rows: int, results: Sequence[Mapping[st
             f" | {r['num_files']} | {times} |"
         )
     return "\n".join(lines) + "\n"
+
+
+# Rows of the before x after sheet (task 6.4): (where, metric key, label, unit). ``where`` is
+# ``main`` (main job), a step of the main job or ``setup`` (initial silver load).
+COMPARISON_ROWS: tuple[tuple[str, str, str, str], ...] = (
+    ("main", "wall_s", "Main job (silver MERGE + gold), wall", "s"),
+    ("silver_merge", "wall_s", "silver MERGE, wall", "s"),
+    ("gold", "wall_s", "gold, wall", "s"),
+    ("setup", "wall_s", "Initial silver load (setup, 1 run), wall", "s"),
+    ("main", "tasks", "Main job tasks", ""),
+    ("main", "stages", "Main job stages", ""),
+    ("main", "shuffle_read_bytes", "Main job shuffle read", "bytes"),
+    ("main", "shuffle_write_bytes", "Main job shuffle write", "bytes"),
+    ("main", "memory_spill_bytes", "Main job spill (memory)", "bytes"),
+    ("main", "disk_spill_bytes", "Main job spill (disk)", "bytes"),
+    ("main", "executor_run_s", "Main job executor run time", "s"),
+    ("main", "gc_s", "Main job GC time", "s"),
+    ("main", "max_task_skew", "Max task skew (max/median)", "x"),
+)
+
+
+def pct_change(before: float, after: float) -> str:
+    """Relative change after vs before: ``-63.1%``; ``=`` when both are 0, ``n/a`` from 0."""
+    if before == 0:
+        return "=" if after == 0 else "n/a"
+    change = (after - before) / before * 100
+    return f"{change:+.1f}%".replace("-", "\N{MINUS SIGN}")
+
+
+def _metric(result: Mapping[str, Any], where: str, key: str) -> float:
+    if where == "main":
+        source = result["summary"]["main"]
+    elif where == "setup":
+        source = result.get("setup", {}).get("silver_initial", {})
+    else:
+        source = result["summary"]["steps"].get(where, {})
+    return float(source.get(key, 0.0))
+
+
+def _files_cell(stats: Mapping[str, Any] | None) -> str:
+    if not stats:
+        return "-"
+    per = stats["files_per_partition_min"], stats["files_per_partition_max"]
+    spread = f"{per[0]}" if per[0] == per[1] else f"{per[0]}–{per[1]}"
+    return f"{stats['num_files']} ({human_bytes(stats['avg_file_bytes'])} avg; {spread}/partition)"
+
+
+def render_comparison(
+    before: Mapping[str, Any],
+    after: Mapping[str, Any],
+    checks: Mapping[str, Mapping[str, Any]],
+    reads: Mapping[str, Mapping[str, Any]] | None = None,
+    info: Mapping[str, str] | None = None,
+) -> str:
+    """Before x after sheet of two benchmark results measured on the same runner (task 6.4).
+
+    `before` and `after` are ``benchmark.json`` results; `checks` maps each compared table to
+    ``{"before": fingerprint, "after": fingerprint}``; `reads` optionally maps ``before`` and
+    ``after`` to a read-workload state (``reads``, ``reads_total_s``, ``skipping``) of the
+    maintenance step. Metadata only (RST-01).
+    """
+    lines = ["# Before × after on the same runner (task 6.4)", ""]
+    for key, value in (info or {}).items():
+        lines.append(f"- {key}: {value}")
+    runs = before["summary"]["runs"], after["summary"]["runs"]
+    lines += [
+        f"- runs: {runs[0]} before, {runs[1]} after (median reported)",
+        "",
+        "| Metric | Before | After | Change |",
+        "|---|---:|---:|---:|",
+    ]
+    for where, key, label, unit in COMPARISON_ROWS:
+        b, a = _metric(before, where, key), _metric(after, where, key)
+        lines.append(f"| {label} | {_format(b, unit)} | {_format(a, unit)} | {pct_change(b, a)} |")
+    files_b, files_a = before.get("files", {}), after.get("files", {})
+    tables = [t for t in dict.fromkeys([*files_b, *files_a]) if not t.startswith("bronze/")]
+    if tables:
+        lines += ["", "## Files per table (live files after the main job)", ""]
+        lines += ["| Table | Before | After | Change (files) |", "|---|---:|---:|---:|"]
+        for table in tables:
+            fb, fa = files_b.get(table), files_a.get(table)
+            change = pct_change(fb["num_files"], fa["num_files"]) if fb and fa else "-"
+            lines.append(f"| {table} | {_files_cell(fb)} | {_files_cell(fa)} | {change} |")
+    if reads:
+        rb, ra = reads["before"], reads["after"]
+        lines += ["", "## Read workload on silver (median, s)", ""]
+        lines += ["| Query | Before | After | Change |", "|---|---:|---:|---:|"]
+        for query, value in rb["reads"].items():
+            b, a = float(value["median_s"]), float(ra["reads"][query]["median_s"])
+            lines.append(f"| {query} | {b:.2f} | {a:.2f} | {pct_change(b, a)} |")
+        b, a = float(rb["reads_total_s"]), float(ra["reads_total_s"])
+        lines.append(f"| **Total** | **{b:.2f}** | **{a:.2f}** | **{pct_change(b, a)}** |")
+        lines += ["", "| Data skipping: files that may match / live | Before | After |"]
+        lines.append("|---|---:|---:|")
+        for pred, hit in rb.get("skipping", {}).items():
+            other = ra.get("skipping", {}).get(pred, {"may_match": 0, "files": 0})
+            lines.append(
+                f"| `{pred}` | {hit['may_match']} / {hit['files']}"
+                f" | {other['may_match']} / {other['files']} |"
+            )
+    lines += ["", "## Same results", ""]
+    for table, check in checks.items():
+        same = check["before"] == check["after"]
+        rows = check["after"].get("rows", "?")
+        lines.append(f"- {table}: fingerprint {'identical' if same else 'DIFFERENT'} ({rows} rows)")
+    return "\n".join(lines) + "\n"
