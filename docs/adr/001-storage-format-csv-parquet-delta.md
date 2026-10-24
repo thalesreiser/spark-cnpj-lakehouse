@@ -1,7 +1,7 @@
 # 001 - Storage format: CSV vs Parquet vs Delta
 
 - **Status:** accepted
-- **Date:** 2026-10-22
+- **Date:** 2026-10-22 (proposed on 2026-10-16; accepted with the task 6.2 measurement)
 
 ## Context
 
