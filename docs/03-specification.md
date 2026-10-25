@@ -141,7 +141,7 @@ Feature: Unit tests
     And the run fails below 80% line coverage
 ```
 
-### RF-10 - Partner record linkage (Could, not implemented)
+### RF-10 - Partner record linkage (Could)
 
 *As the data consumer, I want candidate pairs of partners with similar names, so that I can study shared ownership.*
 
@@ -154,7 +154,7 @@ Feature: Partner record linkage
     And a sample of pairs is reviewed manually
 ```
 
-Not implemented: a Could item, left out by the MoSCoW rule (R-01) once the Must and Should items were done; see [06 - Traceability](06-traceability.md).
+Implemented as a technical exercise (task 7.4): blocking by normalized first + last name token and the masked CPF digits, Jaro-Winkler score, bands `match` ≥ 0.92 and `review` 0.85–0.92, aggregates-only report and a local, git-ignored review sample ([linkage](linkage.md), [ADR 014](adr/014-partner-record-linkage-and-privacy.md)). Proven on synthetic partners; the real-data review is pending.
 
 ### Non-functional requirements, rule and constraint
 

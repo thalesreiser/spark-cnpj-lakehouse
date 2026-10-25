@@ -76,6 +76,7 @@ flowchart LR
 | Silver | Delta, not partitioned, `MERGE` by business key | Typed and normalized current state per key; quality checks | [009](adr/009-alphanumeric-cnpj-and-invalid-values.md), [010](adr/010-invalid-and-all-zero-cnpj-in-silver.md), [011](adr/011-silver-current-state-merge.md) |
 | Gold | Delta, whole-table overwrite | Three aggregated tables, sum checks and reconciliation with silver | [003](adr/003-broadcast-join-for-lookup-tables.md), [012](adr/012-gold-aggregations-and-counting-rules.md) |
 | Maintenance | `OPTIMIZE` (128 MiB), `VACUUM` (840 h) | File compaction and bounded history | [004](adr/004-target-file-size.md), [013](adr/013-table-maintenance-and-vacuum-retention.md) |
+| Record linkage (RF-10) | Spark self-join inside blocks, Jaro-Winkler UDF | `gold/linkage_candidates` (row keys, no names) and an aggregates-only report; review sample only in the git-ignored `build/linkage-review/` | [014](adr/014-partner-record-linkage-and-privacy.md) |
 | Benchmark | `scripts/benchmark.py`, Spark event logs, History Server, headless Chromium | Before × after on one runner with identical fingerprints | [006](adr/006-ci-as-execution-environment.md) |
 | Notebooks | Jupyter, executed by workflows | Time travel demo and business questions on gold (aggregates only) | [012](adr/012-gold-aggregations-and-counting-rules.md) |
 
