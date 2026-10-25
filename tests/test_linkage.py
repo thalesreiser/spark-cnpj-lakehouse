@@ -208,7 +208,7 @@ def test_public_candidates_and_report_hold_no_names(spark: SparkSession) -> None
 def test_review_sample_is_seeded_and_band_checked(spark: SparkSession) -> None:
     pairs = candidate_pairs(prepare(socios(spark)), Thresholds(match=0.99, review=0.5))
     first = review_sample(pairs, 2, seed=7)
-    assert first == review_sample(pairs, 2, seed=7) and len(first) == 2
+    assert first == review_sample(pairs.repartition(3), 2, seed=7) and len(first) == 2
     assert all(0.5 <= r["score"] < 0.99 and r["label"] == "" for r in first)
     with pytest.raises(ValueError):
         review_sample(pairs, 1, band="maybe")

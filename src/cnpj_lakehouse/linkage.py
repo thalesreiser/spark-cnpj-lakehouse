@@ -419,12 +419,16 @@ def ensure_private_path(path: Path, cwd: Path | None = None) -> Path:
 def review_sample(
     pairs: DataFrame, n: int, band: str = "review", seed: int = 42
 ) -> list[dict[str, Any]]:
-    """``n`` random pairs of ``band`` (seeded), with names, for the local manual review."""
+    """``n`` pseudo-random pairs of ``band``, with names, for the local manual review.
+
+    The order is a hash of the seed and the row keys, so the sample does not depend on the
+    partitioning (``F.rand`` would).
+    """
     if band not in BANDS:
         raise ValueError(f"unknown band {band!r}; expected one of {BANDS}")
     rows = (
         pairs.where(F.col("band") == band)
-        .orderBy(F.rand(seed), "left_row_id", "right_row_id")
+        .orderBy(F.xxhash64(F.lit(seed), "left_row_id", "right_row_id"), "left_row_id")
         .limit(n)
         .collect()
     )
