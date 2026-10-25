@@ -150,8 +150,12 @@ Spark applications run in the `spark-client` service, which uses the same image 
 make download COMPETENCIA=2026-09                            # lookup tables only (safe default, a few KB)
 make download COMPETENCIA=2026-09 FILES="lookups Empresas1"  # a subset
 make download COMPETENCIA=2026-09 FILES=all                  # the whole release (~7.8 GB zipped, ~29 GB unzipped)
-make run                                                      # bronze → silver → gold
+make up                                                       # MinIO + Spark (once)
+make run COMPETENCIA=2026-09 FILES="lookups Empresas1"        # RNF-05: download → bronze → silver → quality → gold
+make run COMPETENCIA=2026-09 FILES="lookups Empresas1" SKIP_DOWNLOAD=1  # files already on disk: only verify them
 ```
+
+`make run` (`python -m cnpj_lakehouse.pipeline`, RNF-05) chains the step targets below in order (download, manifest check, bronze, bronze-check, silver, silver-check, quality, gold, reconcile; one Spark application per step), stops at the first failure with a non-zero exit and writes `build/pipeline-<COMPETENCIA>.json|md` (status, exit code and duration of each step).
 
 `COMPETENCIA` is the reference month (YYYY-MM) of the Receita Federal release, kept with its domain name. `make download` (RF-01) fetches the zips into `data/raw/<COMPETENCIA>/`, unzips them there and writes `manifest.json` with the source URL, size, SHA-256, download time and extracted files of each zip. It retries transient errors with backoff, resumes partial downloads with HTTP `Range`, and skips files that still match the manifest, so re-runs are idempotent. `FILES` accepts groups (`empresas`, `estabelecimentos`, `socios`, `simples`, `lookups`, `all`) and file names (`Empresas0`, `Cnaes`, ...). It defaults to `lookups`, so downloading the whole release always requires an explicit `FILES=all` (a protection for machines and runners with little disk). The same options exist on the CLI:
 
