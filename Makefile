@@ -117,3 +117,14 @@ vacuum:  ## RF-07: VACUUM of LAYER with RETENTION_HOURS (refused below 168 h, AD
 	$(SPARK_RUN) python -m cnpj_lakehouse.maintenance vacuum --layer $(LAYER) \
 		$(if $(strip $(TABLES)),--tables $(TABLES),) --retention-hours $(RETENTION_HOURS) \
 		--summary build/vacuum-$(LAYER).json
+
+.PHONY: linkage linkage-precision
+# RF-10 (task 7.4, ADR 014): partner record linkage on silver socios -> gold/linkage_candidates
+# (no names) and aggregates in build/linkage; LINKAGE_ARGS e.g. "--review-sample 50" writes a
+# sample WITH NAMES to the git-ignored build/linkage-review/ (never publish it, docs/linkage.md).
+linkage:  ## RF-10: candidate pairs with a Jaro-Winkler score; aggregate report in build/linkage
+	$(SPARK_RUN) python -m cnpj_lakehouse.linkage candidates --competencia $(COMPETENCIA) 		--out build/linkage $(LINKAGE_ARGS)
+
+REVIEW ?= build/linkage-review/review-$(COMPETENCIA).csv
+linkage-precision:  ## RF-10: aggregate precision of the labeled local review sample (no Spark)
+	python -m cnpj_lakehouse.linkage precision --review $(REVIEW) --out build/linkage
