@@ -67,7 +67,8 @@ reconcile:  ## RF-05 proof: gold totals (total, by UF, status, size, gold grain)
 # reconcile, one Spark application per step; stops at the first failure. Run summary (durations
 # only) in build/pipeline-<COMPETENCIA>.json|md.
 run:  ## RNF-05: full pipeline of COMPETENCIA in one command (FILES as in `make download`)
-	$(SPARK_RUN) python -m cnpj_lakehouse.pipeline --competencia $(COMPETENCIA) \n		$(if $(strip $(FILES)),--files $(FILES),) $(if $(SKIP_DOWNLOAD),--skip-download,)
+	$(SPARK_RUN) python -m cnpj_lakehouse.pipeline --competencia $(COMPETENCIA) \
+		$(if $(strip $(FILES)),--files $(FILES),) $(if $(SKIP_DOWNLOAD),--skip-download,)
 
 lint:
 	ruff check src tests scripts infra && black --check src tests scripts infra && mypy src scripts infra
