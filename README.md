@@ -52,7 +52,7 @@ make up                       # builds the Spark image, starts Spark + MinIO, cr
 make run COMPETENCIA=2026-09  # the whole pipeline for one release month
 ```
 
-Needs Docker with Compose v2, GNU make and ~8 GB of RAM; `make down` stops the stack. `COMPETENCIA` is the release month (YYYY-MM). `make download` fetches only the lookup tables by default; widen with `FILES="lookups Empresas1"` or `FILES=all` (~7.8 GB zipped, ~29 GB unzipped), or set `SPARK_SAMPLE_FRACTION=0.1` for a deterministic sample. Unit tests need only Python 3.11 and Java 17: `make install && make test`.
+Needs Docker with Compose v2, GNU make and ~8 GB of RAM; `make down` stops the stack. `COMPETENCIA` is the release month (YYYY-MM); `make run` (`cnpj_lakehouse.pipeline`) chains download, manifest check, bronze, silver, quality, gold and reconciliation, stops at the first failing step and writes `build/pipeline-<COMPETENCIA>.json|md` (`SKIP_DOWNLOAD=1` reuses files already downloaded). `make download` fetches only the lookup tables by default; widen with `FILES="lookups Empresas1"` or `FILES=all` (~7.8 GB zipped, ~29 GB unzipped), or set `SPARK_SAMPLE_FRACTION=0.1` for a deterministic sample. Unit tests need only Python 3.11 and Java 17: `make install && make test`.
 
 **Where the heavy runs happen.** The development laptop cannot host the stack and the data, so GitHub Actions is the execution environment ([ADR 006](docs/adr/006-ci-as-execution-environment.md)): the `CI` workflow on every pull request, and the manual `Benchmark`, `Gold analysis` and `Download` workflows for real-data runs. Artifacts and job summaries hold counts and metrics only.
 
@@ -102,7 +102,6 @@ From [`notebooks/02-business-questions.ipynb`](notebooks/02-business-questions.i
 - **Sample, not the full release.** Benchmarks and analyses use one or two of the ten files per table, and the files are split by CNPJ range (not random), so absolute numbers are partial. The whole release (~29 GB unzipped) was never run: it does not fit the 14 GB disk of a GitHub runner ([ADR 006](docs/adr/006-ci-as-execution-environment.md)).
 - **Runner variance.** GitHub assigns the runner CPU; between jobs the same code varied by ~5–10%. The headline −50.1% compares both versions inside one job for that reason.
 - **Record linkage (RF-10) not implemented** — a "Could" item left out by MoSCoW.
-- **Single-command run.** `make run` (`cnpj_lakehouse.pipeline`) is the single entry point; until it is wired up in `main`, the steps run as one `make` target each, exactly as CI runs them.
 - **Source availability.** The Receita Federal portal has moved and gone offline before; PR runs use the Actions cache (evicted after 7 days unused), so a portal outage with a cold cache still fails a run.
 - **LGPD.** Only aggregates, counts and metadata leave the pipeline; no raw data is committed; fixtures are synthetic and verified absent from the real registry. Partner CPFs come partially masked by the source, and re-identification is forbidden ([`USAGE-POLICY.md`](USAGE-POLICY.md)).
 

@@ -111,16 +111,20 @@ jobs:
           key: ${{ steps.raw-key.outputs.key }}
       - name: make up
         run: make up
-      - name: make bronze (every downloaded table)
-        run: make bronze COMPETENCIA="$COMPETENCIA"
+      # RNF-05: the whole month in one command (files from the cache/download above, verified
+      # again by the pipeline): bronze, bronze-check, silver, silver-check, quality, gold and
+      # reconcile, one Spark application per step, stopping at the first failure. The steps
+      # below re-run parts of it (RF-04 idempotency, next month, time travel) and check its outputs.
+      - name: make run (RNF-05, full pipeline in one command)
+        run: |
+          make run COMPETENCIA="$COMPETENCIA" SKIP_DOWNLOAD=1
+          cat "build/pipeline-${COMPETENCIA}.md" >> "$GITHUB_STEP_SUMMARY"
+          jq -e '.passed and .steps_by_status.passed == 8 and .steps_by_status.skipped == 1
+            and .steps[0].name == "download"' "build/pipeline-${COMPETENCIA}.json"
       - name: make bronze again (re-run replaces the partition, no duplicates)
         run: make bronze COMPETENCIA="$COMPETENCIA" TABLES="cnaes motivos"
-      - name: make bronze-check (source lines == bronze rows)
+      - name: make bronze-check after the re-run (source lines == bronze rows)
         run: make bronze-check COMPETENCIA="$COMPETENCIA"
-      - name: make silver (every bronze table)
-        run: make silver COMPETENCIA="$COMPETENCIA"
-      - name: make silver-check (no duplicated business key, dates typed, counts reconciled)
-        run: make silver-check COMPETENCIA="$COMPETENCIA"
       # RF-04 / ADR 011: re-running the month merges nothing; a synthetic next month derived from
       # the same bronze (no download) updates the changed keys and inserts the new ones.
       - name: make silver again (RF-04, same month -> 0 inserted, 0 updated, same fingerprint)
@@ -190,11 +194,10 @@ jobs:
             build/next-month.json
             build/silver-check*/
             build/time-travel*
+            build/pipeline-*
           retention-days: 30
           if-no-files-found: warn
-      # RF-03 quality checks (task 3.4): blocking `error` rules fail the job; counts only (RST-01).
-      - name: make quality (nulls, domains, uniqueness; error rules block)
-        run: make quality COMPETENCIA="$COMPETENCIA"
+      # RF-03 quality checks (task 3.4), run by `make run`: blocking `error` rules fail it (RST-01).
       - name: Quality report summary
         if: always()
         run: |
@@ -208,20 +211,18 @@ jobs:
           path: build/quality-${{ env.COMPETENCIA }}/
           retention-days: 30
           if-no-files-found: warn
-      # RF-05 (ADR 012): gold from the silver current state, sums reconciled with silver. CI loads
+      # RF-05 (ADR 012), built by `make run` above: gold from the silver current state, sums reconciled with silver. CI loads
       # no Estabelecimentos file (time and disk), so only gold_distribuicao_porte is built on real
       # data here; the establishment tables run end to end on Delta in tests/test_gold_delta.py.
-      - name: make gold (RF-05, gold sums == eligible silver rows; counts only)
+      - name: Gold summary (RF-05, gold sums == eligible silver rows; counts only)
         run: |
-          make gold COMPETENCIA="$COMPETENCIA"
           cat "build/gold-${COMPETENCIA}.md" >> "$GITHUB_STEP_SUMMARY"
           jq -e '.passed and ([.tables[] | select(.table == "gold_distribuicao_porte"
             and .rows > 0)] | length == 1)' "build/gold-${COMPETENCIA}.json"
       # Task 5.2: gold recomputed independently from silver (total, by size; the UF and status
       # breakdowns need Estabelecimentos, proven on synthetic Delta data in test_gold_delta.py).
-      - name: make reconcile (RF-05, gold totals == silver, by size; counts only)
+      - name: Reconcile summary (RF-05, gold totals == silver, by size; counts only)
         run: |
-          make reconcile COMPETENCIA="$COMPETENCIA"
           cat build/reconcile/reconcile.md >> "$GITHUB_STEP_SUMMARY"
           jq -e '.passed and (.tables == ["gold_distribuicao_porte"])' build/reconcile/reconcile.json
       - name: Upload gold summary (no data)
