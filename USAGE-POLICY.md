@@ -25,7 +25,7 @@ The MIT license applies to the **code**, not to the data it processes.
 - The data belongs to its sources and follows their terms of use.
 - Whoever runs the project is responsible for using the data in accordance with Brazil's data protection law (**LGPD, Law 13,709/2018**) and the terms of the sources.
 - **CNPJ data (Brazilian Federal Revenue Service):** partner records come with CPFs (individual taxpayer IDs) partially masked by the source itself. **Do not** use this project to try to re-identify individuals, to cross-reference the data with other databases for that purpose, or to build profiles of people (project constraint RST-01; see also the LGPD).
-- Matching partners with the same name (RF-10) is a technical *record linkage* exercise with sample-based review, not a tool for identifying people.
+- Matching partners with the same name (RF-10) is a technical *record linkage* exercise with sample-based review, not a tool for identifying people. Only aggregates are published; the review sample with names stays in the git-ignored `build/linkage-review/` and must never be shared ([`docs/linkage.md`](docs/linkage.md)).
 
 ## Data sources and attribution
 
