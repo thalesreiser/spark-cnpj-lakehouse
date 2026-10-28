@@ -94,7 +94,7 @@ jobs:
           echo "key=cnpj-raw-${COMPETENCIA}-${files_hash}-${{ hashFiles('src/cnpj_lakehouse/download.py') }}" >> "$GITHUB_OUTPUT"
       - name: Restore the raw files (Actions cache)
         id: raw-cache
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: data/raw/${{ env.COMPETENCIA }}
           key: ${{ steps.raw-key.outputs.key }}
@@ -105,7 +105,7 @@ jobs:
         run: python -m cnpj_lakehouse.download --competencia "$COMPETENCIA" --files $FILES --verify-only && df -h .
       - name: Save the raw files (push to main only)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.raw-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: data/raw/${{ env.COMPETENCIA }}
           key: ${{ steps.raw-key.outputs.key }}
